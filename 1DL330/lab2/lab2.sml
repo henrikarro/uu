@@ -45,10 +45,10 @@ fun is_present' x (Node(y, children)) = x = y orelse List.exists (is_present' x)
 fun is_present tree x = is_present' x tree;
 
 fun maxList [] maxSoFar = maxSoFar
-  | maxList (x::xs) maxSoFar = if x > maxSoFar then max xs x else  maxList xs maxSoFar;
+  | maxList (x::xs) maxSoFar = if x > maxSoFar then maxList xs x else maxList xs maxSoFar;
 
 fun maxList' l minValue = foldl Int.max minValue l;
 
 fun height (Node(_, [])) = 1
-  | height (Node(_, children)) = 1 + max (List.map height children) 0;
+  | height (Node(_, children)) = 1 + maxList (List.map height children) 0;
 
