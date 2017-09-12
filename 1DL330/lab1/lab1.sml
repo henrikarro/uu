@@ -84,7 +84,7 @@ fun m divides n = n mod m = 0;
 
 (* between m n
    TYPE: int -> int -> int list
-   PRE:
+   PRE: true
    POST: list of the integers m .. n, if m <= n, otherwise the empty list
    SIDE EFFECTS:
    EXAMPLES: between 2 3 = [2, 3]; between 2 2 = [2]; between 3 2 = []
@@ -94,8 +94,8 @@ fun between m n =
   if n < m then [] else m :: between (m + 1) n;
 
 (* smallestSoThat pred n
-   TYPE: (int -> bool) -> int -> in
-   PRE:  There is m >= n so that (pred m) is true
+   TYPE: (int -> bool) -> int -> int
+   PRE: There is m >= n so that (pred m) is true
    POST: The smallest m >= n so that (pred m) is true
    SIDE EFFECTS:
    EXAMPLES: smallestSoThat (fn x => x > 10) 1 = 11
