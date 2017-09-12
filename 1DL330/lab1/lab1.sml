@@ -91,8 +91,7 @@ fun m divides n = n mod m = 0;
  *)
 (* VARIANT: size of the set of integers between m and n *)
 fun between m n =
-  if n < m then []
-  else m :: between (m + 1) n;
+  if n < m then [] else m :: between (m + 1) n;
 
 (* smallestSoThat pred n
    TYPE: (int -> bool) -> int -> in
