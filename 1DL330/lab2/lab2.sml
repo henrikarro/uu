@@ -1,5 +1,9 @@
-fun iota 0 = []
-  | iota n = iota (n - 1) @ [n - 1];
+fun iota n =
+  let fun iota' 0 l = l
+	| iota' n l = iota' (n - 1) ((n - 1)::l)
+  in
+      iota' n []
+  end;
 
 fun member _ [] = false
   | member x (y::ys) = x = y orelse member x ys;
