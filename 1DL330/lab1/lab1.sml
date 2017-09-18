@@ -1,3 +1,10 @@
+(* Functional Programming 1DL330
+   Assignment 1
+
+   Henrik Arro
+   Imad Collin
+ *)
+
 (* Excercise 1 *)
 
 (* 1.1
