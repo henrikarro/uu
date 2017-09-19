@@ -105,7 +105,10 @@ fun inter' [] _ = []
 
 (* Exercise 3: Fruit *)
 
-datatype fruit = Apple of real | Banana of real | Lemon of int;
+datatype fruit =
+	 Apple of real (* Weight units of apples *)
+	 | Banana of real (* Weight units of bananas *)
+	 | Lemon of int; (* Units of lemons *)
 
 (* sumPrice fruits applePrice bananPrice lemonPrice
    TYPE: fruit list -> real -> real -> real -> real
@@ -137,6 +140,8 @@ fun sumPrice fruits applePrice bananaPrice lemonPrice =
 
 (* Exercise 4: Trees *)
 
+(* An ltree consists of nodes with a label of type 'a, and a list of children. A leaf is
+   a node with no children, i.e., an empty list of children. *)
 datatype 'a ltree = Node of 'a * 'a ltree list;
 
 (* sumList l sumSoFar
