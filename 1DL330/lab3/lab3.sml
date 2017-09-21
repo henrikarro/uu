@@ -79,9 +79,6 @@ fun sub_tree m n t =
       sub_tree' t
   end;
 
-fun depth Void = 0
-  | depth (Node(t1, _, t2)) = 1 + Int.max (depth t1, depth t2);
-
 (* Exercise 5: Complexity
 
    The time complexity of the function sub_tree is linear in the depth of the tree,
@@ -99,3 +96,25 @@ fun depth Void = 0
    to chase down the entire "list" while creating a copy, so for example "sub_tree 0 6 degenerate"
    is an example of a worst case scenario.
  *)
+
+(* The following is not part of the assignment, but a continuation of my question if it is
+   possible to replace all recursion with fold.
+
+   I tried to create the everySecond function, which gives the first, third, fifth, and so on,
+   elements of a list. That function uses map, filter, zip, tabulate and length. I then tried
+   to implement these functions using only fold. It turns out that foldr on lists and list pairs
+   gets you a long way, but you also need a way to construct new lists. Since SML does not have
+   list comprehensions, it seems to be necessary to introduce a recursive function like
+   "between m n" that gives a list of numbers between m and n.
+
+   Anyway, this is what I came up with, replacements for the builtin list and list pair functions
+   using only foldr, and the between function. *)
+
+fun map' f l = foldr (fn (x, y) => f x::y) [] l;
+fun filter' pred l = foldr (fn (x, y) => if pred x then x::y else y) [] l;
+fun length' l = foldr (fn (x, y) => 1 + y) 0 l;
+fun zip' (l1, l2) = ListPair.foldr (fn (x, y, z) => (x, y)::z) [] (l1, l2);
+fun between m n = if n < m then [] else m :: between (m + 1) n;
+fun tabulate' (n, f) = foldr (fn (x, y) => f x::y) [] (between 0 (n - 1));
+	
+fun everySecond l = map' #1 (filter' (fn (x, y) => y = 0) (zip' (l, tabulate' (length' l, fn x => x mod 2))));
