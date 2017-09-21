@@ -22,7 +22,7 @@ fun average [] = 0.0
     let
 	(* average' list sum len
 	   TYPE: real list -> real -> int -> real
-	   PRE: length list > 0
+	   PRE: (length list + len) > 0
 	   POST: (sum of the elements of list + sum) / (length of list + len)
 	   SIDE EFFECTS:
 	   EXAMPLES: average' [1.0, 4.0, 10.0] 0.0 0 =~ 5.0; average' [4.0, 10.0] 1.0 1 =~ 5.0; average' [10.0] 5.0 2 =~ 5.0;
