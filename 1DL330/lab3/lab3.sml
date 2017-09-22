@@ -38,7 +38,7 @@ fun average [] = 0.0
 
 fun append list1 list2 = foldr op:: list2 list1;
 
-fun member elem list = foldl (fn (x, y) => x = elem orelse y) false list;
+fun member elem list = foldl (fn (x, y) => y orelse x = elem) false list;
 
 fun last (elem::rest) = foldl (fn (x, _) => x) elem rest;
 
