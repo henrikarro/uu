@@ -115,6 +115,6 @@ fun filter' pred l = foldr (fn (x, y) => if pred x then x::y else y) [] l;
 fun length' l = foldr (fn (x, y) => 1 + y) 0 l;
 fun zip' (l1, l2) = ListPair.foldr (fn (x, y, z) => (x, y)::z) [] (l1, l2);
 fun between m n = if n < m then [] else m :: between (m + 1) n;
-fun tabulate' (n, f) = foldr (fn (x, y) => f x::y) [] (between 0 (n - 1));
+fun tabulate' (n, f) = map' f (between 0 (n - 1));
 	
 fun everySecond l = map' #1 (filter' (fn (x, y) => y = 0) (zip' (l, tabulate' (length' l, fn x => x mod 2))));
