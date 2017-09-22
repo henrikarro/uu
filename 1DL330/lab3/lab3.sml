@@ -68,7 +68,7 @@ fun sub_tree m n t =
       (* sub_tree' t
 	 TYPE: tree -> tree
 	 A helper function that has the same specification as sub_tree, but without
-	 the m and n arguments, which never change. This simplifies the recurive calls,
+	 the m and n arguments, which never change. This simplifies the recursive calls,
 	 making the code a little bit clearer. *)
       fun sub_tree' Void = Void
 	| sub_tree' (Node(t1, x, t2)) =
