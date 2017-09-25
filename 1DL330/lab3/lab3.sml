@@ -81,10 +81,17 @@ fun sub_tree m n t =
 
 (* Exercise 5: Complexity
 
-   The time complexity of the function sub_tree is linear in the depth of the tree,
-   i.e., O(depth t). If the tree is balanced, this means the average time to build
-   a sub tree is O(log n), where n is the size of the tree.
+   The sub_tree function needs to find all the nodes that should be in the sub tree,
+   and also the two nodes that are "just outside" the sub tree to the left and to the
+   right, if they exist. Since we assume that the lower and upper limits are fixed,
+   the size of the sub tree is fixed. This means that the time to run sub_tree is a
+   constant factor of the time to search for a node.
 
+   The time complexity to search in a binary search tree is linear in the depth of
+   the tree, i.e., O(depth t). If the tree is balanced, this means the average time
+   to search for a node is O(log n), where n is the size of the tree. In turn, this
+   means the time build a sub tree is a constant factor of this, i.e., also O(log n).
+   
    However, if the tree is degenerate, it will be a kind of linked list:
 
    val degenerate = Node(Void, 0, Node(Void, 1, Node(Void, 2, Node(Void, 3, Node(Void, 4, Node(Void, 5, Void))))));
