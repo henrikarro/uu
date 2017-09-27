@@ -1,3 +1,9 @@
+(* The following dictionary code using binary trees is taken from
+ * https://www.cs.cmu.edu/~rwh/introsml/modules/sigstruct.htm.
+ *
+ * The only addition is the function keys.
+ *)
+
 (*** Binary trees ***)
 
 datatype 'a tree = Lf
@@ -55,6 +61,8 @@ fun keys Lf = []
 
 end;
 
+(***** End stolen code. The following is written by me. *****)
+
 signature VALUATION = sig
     type t;
     val empty : t
@@ -73,7 +81,7 @@ fun variables valuation = D.keys valuation;
 fun print valuation = ();
 end;
 
-structure Valuation :> VALUATION = ValuationFromDictionary (Dict);
+structure Valuation = ValuationFromDictionary (Dict);
 
 datatype formula = True | False | Var of string | Not of formula
 		   | And of formula * formula | Or of formula * formula;
