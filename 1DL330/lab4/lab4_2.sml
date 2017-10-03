@@ -105,6 +105,13 @@ structure Valuation = ValuationFromDictionary (Dict);
 datatype formula = True | False | Var of string | Not of formula
 		   | And of formula * formula | Or of formula * formula;
 
+(* The following tautoloty checker by conversion to "conjunction normal form" is taken from
+ * http://www.cl.cam.ac.uk/~lp15/MLbook/programs/sample4.sml.
+ *
+ * The only changes are about the representation of formulas, where the original does not
+ * have true and false as atoms.
+ *)
+
 fun nnf True = True
   | nnf False = False
   | nnf (Var x) = Var x
@@ -152,6 +159,8 @@ fun negatives True = ["true"]
 
 fun taut (And (p, q)) = taut p andalso taut q
   | taut p = not (null (inter (positives p, negatives p)));
+
+(* End of stolen code. *)
 
 functor Semantics (V : VALUATION) = struct
 
