@@ -4,8 +4,6 @@
    Henrik Arro
  *)
 
-(* Exercise 1: A Signature for Valuations *)
-
 (* The following dictionary code using binary trees is taken from
  * http://www.cl.cam.ac.uk/~lp15/MLbook/programs/sample4.sml.
  *
@@ -74,6 +72,8 @@ end;
 
 (***** End stolen code. The following is written by me. *****)
 
+(* Exercise 1: A Signature for Valuations *)
+
 signature VALUATION = sig
     type t;
     val empty : t
@@ -101,6 +101,21 @@ fun print valuation = TextIO.print (to_string valuation);
 end;
 
 structure Valuation = ValuationFromDictionary (Dict);
+
+(* Exercise 2.2: Time Complexity *)
+
+(* I believe that all functions except empty in the structure Valuation, using a binary tree
+   to represent dictionaries, has a worst time complexity of O(n), where n is the number of
+   variables.
+
+   The average, and worst case, time complexity of empty is obviously constant, i.e., O(1).
+
+   The time complexity of set and value_of is linear in the depth of the tree, so the average
+   time complexity is O(log n) while the worst case is O(n) for a degenerate tree (a list).
+
+   The time complexity of variables, to_string and print is O(n) since all variables need
+   to be included.
+ *)
 
 (* Exercise 3: A Functor for Propositional Logic *)
 
@@ -130,16 +145,37 @@ fun truth_value _ True = true
   | truth_value valuation (And (f1, f2)) = (truth_value valuation f1) andalso (truth_value valuation f2)
   | truth_value valuation (Or (f1, f2)) = (truth_value valuation f1) orelse (truth_value valuation f2);
 
+(* insertUnique comp x xs
+   TYPE: ('a * 'a -> order) -> 'a -> 'a list -> 'a list
+   PRE: xs is sorted in ascending order according to comp
+   POST: the result of inserting x into xs, with any duplicates of x removed
+   SIDE EFFECTS:
+   EXAMPLES: insertUnique Int.compare 2 [1, 2, 2, 3, 3] = [1, 2, 3, 3];
+ *)
 fun insertUnique comp x [] = [x]
   | insertUnique comp x (y::ys) =
     case comp (x, y) of
 	LESS => x :: (y::ys)
       | EQUAL => insertUnique comp x ys
       | GREATER => y :: (insertUnique comp x ys);
-			    
+
+(* sortWithDuplicatesRemoved comp xs
+   TYPE: ('a * 'a -> order) -> 'a list -> 'a list
+   PRE: true
+   POST: xs sorted in ascending order according to comp
+   SIDE EFFECTS:
+   EXAMPLES: sortWithDuplicatesRemoved Int.compare [3, 1, 1, 2, 3, 1, 1, 2, 2, 2] = [1, 2, 3];
+ *)
 fun sortWithDuplicatesRemoved comp [] = []
   | sortWithDuplicatesRemoved comp (x::xs) = insertUnique comp x (sortWithDuplicatesRemoved comp xs);
 
+(* variables f
+   TYPE: formula -> string list
+   PRE: true
+   POST: a list with the unique variables in f
+   SIDE EFFECTS:
+   EXAMPLES: variables (Or (Not (And (And (False, Var "x"), Var "y")), Var "y")) = ["x", "y"];
+ *)
 fun variables formula =
   let
       fun variables' True = []
@@ -152,6 +188,25 @@ fun variables formula =
       sortWithDuplicatesRemoved String.compare (variables' formula)
   end;
 
+(* valuationsForVariables vars
+   TYPE: string list -> V.t list
+   PRE: true
+   POST: A list of valuations for all possible combinations of truth values for the variables in vars
+   i.e., a list with 2^n valuations, where n is the length of vars
+   SIDE EFFECTS:
+   EXAMPLES: valuationsForVariables ["x", "y", "z"] = a list with 8 (= 2^3) valuations, with everything
+   from {"x"=false, "y"=false, "z"=false"} to {"x"=true, "y"=true, "z"=true}
+   NOTE: One way to think about this function is that it returns a complete truth table for vars, e.g.,
+   "x",   "y",   "z"
+   false, false, false
+   false, false, true
+   false, true, false
+   false, true, true
+   true, false, false
+   true, false, true
+   true, true, false
+   true, true, true
+*)
 fun valuationsForVariables vars =
   let
       fun valuationsForVariable var valuation = (V.set valuation var true) :: [V.set valuation var false];
@@ -180,8 +235,12 @@ fun is_taut formula =
   end
 end;
 
+(* Exercise 3.2: Test cases for is_taut *)
+(* See end of file. *)
+
 (* Exercise 4: Simplification of Propositional Formulas *)
 
+(* VARIANT: size of f *)
 fun simp f =
   let
       fun simp' (Or (True, _)) = True
@@ -206,3 +265,80 @@ fun simp f =
   in
       if f = f' then f else simp f'
   end;
+
+(* Exercise 3.2: Test cases for is_taut *)
+
+(*
+ * An extremely simple unit testing framework inspired by SMLUnit (https://github.com/smlsharp/SMLUnit).
+ * Specific to PolyML since PolyML.makestring is used to convert an arbitrary value to a string.
+ *)
+structure PolyMLUnit =
+struct
+exception Fail of string;
+
+fun fail message = raise Fail message;
+
+fun assertEqual expected actual =
+  if expected = actual
+  then ()
+  else fail ("Expected: " ^ PolyML.makestring expected ^ ", actual: " ^ PolyML.makestring actual);
+
+fun assertEqualReal expected actual =
+  let
+      val delta = 10E~8
+  in
+      if Real.abs (expected - actual ) < delta
+      then ()
+      else fail ("Expected: " ^ Real.toString expected ^ ", actual: " ^ Real.toString actual)
+  end;
+
+fun runTest test n =
+  test ()
+  handle Fail message => print ("Test " ^ Int.toString n ^ ": " ^ message ^ "\n")
+       | e => print ("Test " ^ Int.toString n ^ ": " ^ PolyML.makestring e ^ "\n");
+
+fun runTests tests =
+  let fun runTests' [] _ numTests = print (Int.toString numTests ^ " tests run\n")
+	| runTests' (test::tests) n numTests = (
+	    runTest test n;
+	    runTests' tests (n + 1) numTests
+	)
+  in
+      runTests' tests 1 (length tests)
+  end;
+      
+end;
+
+(* Test cases for is_taut *)
+
+structure Lab4Tests =
+struct
+
+structure S = Semantics (Valuation);
+
+fun testFalseIsNotATautology () =
+  PolyMLUnit.assertEqual false (S.is_taut False);
+
+fun testTrueIsATautology () =
+  PolyMLUnit.assertEqual true (S.is_taut True);
+
+fun testOrOfTwoVariableCobinationsIsATautology () =
+  PolyMLUnit.assertEqual true (S.is_taut (Or (Var "x", (Not (Var "x")))));
+
+fun testFalseAndAnythingIsNotATautology () =
+  PolyMLUnit.assertEqual false (S.is_taut (And (False, (Or (Var "x", (Not (Var "x")))))));
+
+fun runTests () =
+  let val allTests = [
+	  testFalseIsNotATautology,
+	  testTrueIsATautology,
+	  testOrOfTwoVariableCobinationsIsATautology,
+	  testFalseAndAnythingIsNotATautology
+      ];
+  in
+      PolyMLUnit.runTests allTests
+  end;
+
+end;
+
+Lab4Tests.runTests ();
