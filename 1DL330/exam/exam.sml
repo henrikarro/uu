@@ -41,6 +41,22 @@ fun insertUnique comp x [] = [x]
 fun sortWithDuplicatesRemoved comp [] = []
   | sortWithDuplicatesRemoved comp (x::xs) = insertUnique comp x (sortWithDuplicatesRemoved comp xs);
 
+val randomSeedTimer = Timer.totalRealTimer ()
+(* Inspired by nextrandom at https://www.cl.cam.ac.uk/~lp15/MLbook/programs/sample3.sml *)
+fun nextRandom max =
+    let
+	fun nextRandom' seed =
+	    let val a = 16807.0
+		val m = 2147483647.0
+		val t = a*seed
+	    in
+		t - m * real(floor(t/m))
+	    end
+	val r = nextRandom' (Time.toReal (Timer.checkRealTimer randomSeedTimer))
+    in
+	round r mod max
+    end
+
 exception IllegalMove of player * move
 
 fun otherPlayer Black = White
@@ -208,7 +224,7 @@ fun think ((player, board), previousMove, timeLeft) =
     let
 	val (_, newBoard) = makeMove previousMove (otherPlayer player, board)
 	val availablePositions = findAllAvailableMoves (player, newBoard)
-	val move = if null availablePositions then Pass else (Move (List.nth (availablePositions, length availablePositions div 2)))
+	val move = if null availablePositions then Pass else (Move (List.nth (availablePositions, nextRandom (length availablePositions))))
     in
 	(move, makeMove move (player, newBoard))
     end
