@@ -59,8 +59,8 @@ fun nextRandom max =
 
 exception IllegalMove of player * move
 
-fun otherPlayer Black = White
-  | otherPlayer White = Black
+fun nextPlayer Black = White
+  | nextPlayer White = Black
 
 (* ================================== *)
 (* Functions to create an empty board *)
@@ -103,7 +103,6 @@ fun init p = (p, emptyBoard)
 
 fun lookupByRowAndColumn row col board =
     let
-	val pos = row * 10 + col
 	val row = Vector.sub (board, row)
     in
 	Vector.sub (row, col)
@@ -130,9 +129,9 @@ fun updateBoardMultiplePositions [] (player, board) = board
 	updateBoardMultiplePositions otherPositions (player, newBoard)
     end
 
-(* ====================================== *)
-(* Search functions for turning positions *)
-(* ====================================== *)
+(* ================================= *)
+(* Functions for finding legal moves *)
+(* ================================= *)
 
 fun searchOneDirection row col (player, board) updatePosition =
     let
@@ -212,21 +211,144 @@ fun findAllFreePositionsWithNeighbor (player, board) =
 
 fun isLegalMove pos (player, board) = not (null (positionsToTurn pos (player, board)))
 
-fun findAllAvailableMoves (player, board) =
+fun findAllLegalPositions (player, board) =
     let
 	val availablePositions =
-	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (otherPlayer player, board))
+	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (nextPlayer player, board))
     in
 	List.filter (fn pos => isLegalMove pos (player, board)) availablePositions
     end
 
+(* =============================== *)
+(* Functions for evaluating boards *)
+(* =============================== *)
+
+fun hasWon (player, board) =
+    let
+	val numPositionsTakenByPlayer = length (findAllPositionsTakenByPlayer (player, board))
+	val numPositionsTakenByOpponent = length (findAllPositionsTakenByPlayer (nextPlayer player, board))
+    in
+	numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 andalso numPositionsTakenByPlayer > numPositionsTakenByOpponent
+    end
+
+fun numCornersTakenByPlayer (player, board) =
+    let
+	val (_, corner1) = lookupByRowAndColumn 1 1 board
+	val (_, corner2) = lookupByRowAndColumn 1 8 board
+	val (_, corner3) = lookupByRowAndColumn 8 1 board
+	val (_, corner4) = lookupByRowAndColumn 8 8 board
+    in
+	foldl op+ 0 (map (fn pos => if isPositionTakenByPlayer player pos then 1 else 0) [corner1, corner2, corner3, corner4])
+    end
+
+fun lineTakenByPlayer row col (player, board) updatePosition =
+    let
+	fun lineLength (newRow, newColumn) positionsTaken =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow newColumn board
+	    in
+		if field = (SOME player)
+		then lineLength (updatePosition (newRow, newColumn)) (pos :: positionsTaken)
+		else positionsTaken
+	    end
+    in
+	lineLength (row, col) []
+    end
+
+fun numSidesTakenByPlayer (player, board) =
+    let
+	val topRow = searchOneDirection 1 1 (player, board) (fn (row, col) => (row, col + 1))
+	val bottomRow = searchOneDirection 8 1 (player, board) (fn (row, col) => (row, col + 1))
+	val leftColumn = searchOneDirection 1 1 (player, board) (fn (row, col) => (row + 1, col))
+	val rightColumn = searchOneDirection 1 8 (player, board) (fn (row, col) => (row + 1, col))
+    in
+	(if length topRow = 8 then 1 else 0) +
+	(if length bottomRow = 8 then 1 else 0) +
+	(if length leftColumn = 8 then 1 else 0) +
+	(if length rightColumn = 8 then 1 else 0)
+    end
+
+fun totalSideLengthFromCorners (player, board) =
+    length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row + 1, col))) +
+    length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row, col + 1))) +
+    length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row + 1, col))) +
+    length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row, col - 1))) +
+    length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row - 1, col))) +
+    length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row, col + 1))) +
+    length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row - 1, col))) +
+    length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row, col - 1)))
+
+fun evaluateBoard (player, board) =
+    let
+	val numPositionsTakenByPlayer = length (findAllPositionsTakenByPlayer (player, board))
+	val numPositionsTakenByOpponent = length (findAllPositionsTakenByPlayer (nextPlayer player, board))
+    in
+	if numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 then
+	    if numPositionsTakenByPlayer > numPositionsTakenByOpponent then 1000
+	    else if numPositionsTakenByPlayer < numPositionsTakenByOpponent then ~1000
+	    else 0
+	else
+	    (numPositionsTakenByPlayer - numPositionsTakenByOpponent) * 1 +
+	    (totalSideLengthFromCorners (player, board)) * 50
+(*
+	    ((numCornersTakenByPlayer (player, board)) - (numCornersTakenByPlayer (nextPlayer player, board))) * 100
+*)
+    end
+
+(* ===================== *)
+(* The Negamax algorithm *)
+(* ===================== *)
+
+fun negamax depth color (player, board) =
+    let
+	fun handleChildren positions =
+	    let
+		val moves = map (fn pos => Move pos) positions
+		val boards = map (fn move => #2 (makeMove move (player, board))) moves
+		val scores = map (fn board => ~(negamax (depth - 1) (~color) (nextPlayer player, board))) boards
+	    in
+		foldl Int.max (~1000) scores
+	    end
+	val legalPositions = findAllLegalPositions (player, board)
+    in
+	if depth = 0 orelse null legalPositions
+	then color * evaluateBoard (player, board)
+	else handleChildren legalPositions
+    end
+
+fun evaluatePositions positions (player, board) =
+    let
+	val moves = map (fn pos => Move pos) positions
+	val boards = map (fn move => #2 (makeMove move (player, board))) moves
+	val scores = map (fn board => negamax 4 1 (player, board)) boards
+    in
+	ListPair.zip (positions, scores)
+    end
+
+fun findBestPosition positions (player, board) =
+    let
+	val bestPositionAndScore =
+	    foldl (fn ((pos1, score1), (pos2, score2)) => if score1 > score2 then (pos1, score1) else (pos2, score2))
+		  (~1, ~10000)
+		  (evaluatePositions positions (player, board));
+    in
+	#1 bestPositionAndScore
+    end
+
+(* ================ *)
+(* The brain itself *)
+(* ================ *)
+
 fun think ((player, board), previousMove, timeLeft) =
     let
-	val (_, newBoard) = makeMove previousMove (otherPlayer player, board)
-	val availablePositions = findAllAvailableMoves (player, newBoard)
-	val move = if null availablePositions then Pass else (Move (List.nth (availablePositions, nextRandom (length availablePositions))))
+	val (_, newBoard) = makeMove previousMove (nextPlayer player, board)
+	val legalPositions = findAllLegalPositions (player, newBoard)
+	val move =
+	    if null legalPositions then Pass
+	    else (Move (findBestPosition legalPositions (player, newBoard)))
     in
-	(move, makeMove move (player, newBoard))
+	(print ("totalSideLengthFromCorners=" ^ Int.toString (totalSideLengthFromCorners (player, newBoard)) ^ "\n");
+	 (move, makeMove move (player, newBoard)))
     end
 
 (* ========================= *)
