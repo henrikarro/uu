@@ -171,7 +171,7 @@ fun neighbors pos board =
 				Vector.sub (nextRow, colNum pos + 1)]
 	val allNeighbors = List.concat [neighborsPreviousRow, neighborsThisRow, neighborsNextRow];
     in
-	List.filter (fn (i, _) => i > 0) allNeighbors
+	List.filter (fn (i, _) => i >= 0) allNeighbors
     end
 
 fun isPositionTakenByPlayer player NONE = false
