@@ -9,7 +9,7 @@ struct
       val _ = print "Please choose your next move (0...63 or return to skip): "
       val move = case Int.fromString (valOf (TextIO.inputLine TextIO.stdIn)) of
         SOME m => Move m
-      | NONE => Skip
+      | NONE => Pass
     in
       (move, ())
     end
