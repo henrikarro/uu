@@ -118,116 +118,18 @@ fun updateBoardMultiplePositions [] (player, board) = board
 (* Search functions for turning positions *)
 (* ====================================== *)
 
-fun searchLeft row col (player, board) =
+fun searchOneDirection row col (player, board) updatePosition =
     let
-	fun searchLeft' newColumn positionsToTurn =
+	fun search (newRow, newColumn) positionsToTurn =
 	    let
-		val (pos, field) = lookupByRowAndColumn row newColumn board
+		val (pos, field) = lookupByRowAndColumn newRow newColumn board
 	    in
 		if field = NONE orelse pos < 0 then []
 		else if field = (SOME player) then positionsToTurn
-		else searchLeft' (newColumn - 1) (pos :: positionsToTurn)
+		else search (updatePosition (newRow, newColumn)) (pos :: positionsToTurn)
 	    end
     in
-	searchLeft' (col - 1) []
-    end
-
-fun searchRight row col (player, board) =
-    let
-	fun searchRight' newColumn positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn row newColumn board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchRight' (newColumn + 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchRight' (col + 1) []
-    end
-
-fun searchUp row col (player, board) =
-    let
-	fun searchUp' newRow positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow col board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchUp' (newRow - 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchUp' (row - 1) []
-    end
-
-fun searchDown row col (player, board) =
-    let
-	fun searchDown' newRow positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow col board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchDown' (newRow + 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchDown' (row + 1) []
-    end
-
-fun searchUpAndLeft row col (player, board) =
-    let
-	fun searchUpAndLeft' newRow newCol positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow newCol board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchUpAndLeft' (newRow - 1) (newCol - 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchUpAndLeft' (row - 1) (col - 1) []
-    end
-
-fun searchUpAndRight row col (player, board) =
-    let
-	fun searchUpAndRight' newRow newCol positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow newCol board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchUpAndRight' (newRow - 1) (newCol + 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchUpAndRight' (row - 1) (col + 1) []
-    end
-
-fun searchDownAndLeft row col (player, board) =
-    let
-	fun searchDownAndLeft' newRow newCol positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow newCol board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchDownAndLeft' (newRow + 1) (newCol - 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchDownAndLeft' (row + 1) (col - 1) []
-    end
-
-fun searchDownAndRight row col (player, board) =
-    let
-	fun searchDownAndRight' newRow newCol positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow newCol board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else searchDownAndRight' (newRow + 1) (newCol + 1) (pos :: positionsToTurn)
-	    end
-    in
-	searchDownAndRight' (row + 1) (col + 1) []
+	search (updatePosition (row, col)) []
     end
 
 fun positionsToTurn pos (player, board) =
@@ -235,14 +137,14 @@ fun positionsToTurn pos (player, board) =
 	val row = rowNum pos
 	val col = colNum pos
     in
-	(searchLeft row col (player, board)) @
-	(searchRight row col (player, board)) @
-	(searchUp row col (player, board)) @
-	(searchDown row col (player, board)) @
-	(searchUpAndLeft row col (player, board)) @
-	(searchUpAndRight row col (player, board)) @
-	(searchDownAndLeft row col (player, board)) @
-	(searchDownAndRight row col (player, board))
+	(searchOneDirection row col (player, board) (fn (row, col) => (row, col - 1))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row, col + 1))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row - 1, col))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row + 1, col))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row - 1, col - 1))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row - 1, col + 1))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row + 1, col - 1))) @
+	(searchOneDirection row col (player, board) (fn (row, col) => (row + 1, col + 1)))
     end
 
 fun makeMove Pass (player, board) = (player, board)
