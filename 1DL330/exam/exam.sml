@@ -8,10 +8,47 @@ val author = "Henrik Arro"
 
 val nickname = "Hendrix"
 
+(* ============================== *)
+(* Miscellaneous helper functions *)
+(* ============================== *)
+
 fun between m n = if n < m then [] else m :: (between (m + 1) n);
 
 fun repeat x 0 = []
   | repeat x n = x :: repeat x (n - 1)
+
+(* insertUnique comp x xs
+   TYPE: ('a * 'a -> order) -> 'a -> 'a list -> 'a list
+   PRE: xs is sorted in ascending order according to comp
+   POST: the result of inserting x into xs, with any duplicates of x removed
+   SIDE EFFECTS:
+   EXAMPLES: insertUnique Int.compare 2 [1, 2, 2, 3, 3] = [1, 2, 3, 3];
+ *)
+fun insertUnique comp x [] = [x]
+  | insertUnique comp x (y::ys) =
+    case comp (x, y) of
+	LESS => x :: (y::ys)
+      | EQUAL => insertUnique comp x ys
+      | GREATER => y :: (insertUnique comp x ys);
+
+(* sortWithDuplicatesRemoved comp xs
+   TYPE: ('a * 'a -> order) -> 'a list -> 'a list
+   PRE: true
+   POST: xs sorted in ascending order according to comp
+   SIDE EFFECTS:
+   EXAMPLES: sortWithDuplicatesRemoved Int.compare [3, 1, 1, 2, 3, 1, 1, 2, 2, 2] = [1, 2, 3];
+ *)
+fun sortWithDuplicatesRemoved comp [] = []
+  | sortWithDuplicatesRemoved comp (x::xs) = insertUnique comp x (sortWithDuplicatesRemoved comp xs);
+
+exception IllegalMove of player * move
+
+fun otherPlayer Black = White
+  | otherPlayer White = Black
+
+(* ================================== *)
+(* Functions to create an empty board *)
+(* ================================== *)
 
 val dummyNode = (~1, NONE);
 
@@ -44,6 +81,10 @@ val emptyBoard =
 
 fun init p = (p, emptyBoard)
 
+(* ====================================== *)
+(* Lookup and update functions for boards *)
+(* ====================================== *)
+
 fun lookupByRowAndColumn row col board =
     let
 	val pos = row * 10 + col
@@ -57,25 +98,25 @@ fun colNum pos = if pos < 0 orelse pos > 63 then raise Domain else pos mod 8 + 1
 
 fun lookup pos board = lookupByRowAndColumn (rowNum pos) (colNum pos) board;
 
-fun playerOptionToString NONE = "."
-  | playerOptionToString (SOME Black) = "x"
-  | playerOptionToString (SOME White) = "o"
+fun updateBoard pos (player, board) =
+    let
+	val row = Vector.sub (board, rowNum pos)
+	val newRow = Vector.update (row, colNum pos, (pos, (SOME player)))
+    in
+	Vector.update (board, rowNum pos, newRow)
+    end
 
-fun rowToString row =
-    Vector.foldr (fn ((i, optionalPlayer), restOfRow) => (if i < 0 then "" else playerOptionToString optionalPlayer) ^ restOfRow)
-    ""
-    row
+fun updateBoardMultiplePositions [] (player, board) = board
+  | updateBoardMultiplePositions (pos::otherPositions) (player, board) =
+    let
+	val newBoard = updateBoard pos (player, board)
+    in
+	updateBoardMultiplePositions otherPositions (player, newBoard)
+    end
 
-fun rowsToString rows =
-    Vector.foldr (fn (row, rows) => if rowToString row = "" then rows else (rowToString row ^ "\n" ^ rows)) "" rows
-
-fun boardToString (player, board) =
-    rowsToString board ^ playerOptionToString (SOME player) ^ " to move"
-
-exception ILLEGAL_MOVE of player * move
-
-fun otherPlayer Black = White
-  | otherPlayer White = Black
+(* ====================================== *)
+(* Search functions for turning positions *)
+(* ====================================== *)
 
 fun searchLeft row col (player, board) =
     let
@@ -105,39 +146,112 @@ fun searchRight row col (player, board) =
 	searchRight' (col + 1) []
     end
 
+fun searchUp row col (player, board) =
+    let
+	fun searchUp' newRow positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow col board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchUp' (newRow - 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchUp' (row - 1) []
+    end
+
+fun searchDown row col (player, board) =
+    let
+	fun searchDown' newRow positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow col board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchDown' (newRow + 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchDown' (row + 1) []
+    end
+
+fun searchUpAndLeft row col (player, board) =
+    let
+	fun searchUpAndLeft' newRow newCol positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow newCol board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchUpAndLeft' (newRow - 1) (newCol - 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchUpAndLeft' (row - 1) (col - 1) []
+    end
+
+fun searchUpAndRight row col (player, board) =
+    let
+	fun searchUpAndRight' newRow newCol positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow newCol board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchUpAndRight' (newRow - 1) (newCol + 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchUpAndRight' (row - 1) (col + 1) []
+    end
+
+fun searchDownAndLeft row col (player, board) =
+    let
+	fun searchDownAndLeft' newRow newCol positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow newCol board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchDownAndLeft' (newRow + 1) (newCol - 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchDownAndLeft' (row + 1) (col - 1) []
+    end
+
+fun searchDownAndRight row col (player, board) =
+    let
+	fun searchDownAndRight' newRow newCol positionsToTurn =
+	    let
+		val (pos, field) = lookupByRowAndColumn newRow newCol board
+	    in
+		if field = NONE orelse pos < 0 then []
+		else if field = (SOME player) then positionsToTurn
+		else searchDownAndRight' (newRow + 1) (newCol + 1) (pos :: positionsToTurn)
+	    end
+    in
+	searchDownAndRight' (row + 1) (col + 1) []
+    end
+
 fun positionsToTurn pos (player, board) =
     let
 	val row = rowNum pos
 	val col = colNum pos
-	val positionsToTurnToTheLeft = searchLeft row col (player, board)
-	val positionsToTurnToTheRight = searchRight row col (player, board)
     in
-	positionsToTurnToTheLeft @ positionsToTurnToTheRight
+	(searchLeft row col (player, board)) @
+	(searchRight row col (player, board)) @
+	(searchUp row col (player, board)) @
+	(searchDown row col (player, board)) @
+	(searchUpAndLeft row col (player, board)) @
+	(searchUpAndRight row col (player, board)) @
+	(searchDownAndLeft row col (player, board)) @
+	(searchDownAndRight row col (player, board))
     end
 
-fun updateBoard pos (player, board) =
-    let
-	val row = Vector.sub (board, rowNum pos)
-	val newRow = Vector.update (row, colNum pos, (pos, (SOME player)))
-    in
-	Vector.update (board, rowNum pos, newRow)
-    end
-
-fun updateBoardMultiplePositions [] (player, board) = board
-  | updateBoardMultiplePositions (pos::otherPositions) (player, board) =
-    let
-	val newBoard = updateBoard pos (player, board)
-    in
-	updateBoardMultiplePositions otherPositions (player, newBoard)
-    end
-
-fun makeMove Pass (player, board) = (otherPlayer player, board)
+fun makeMove Pass (player, board) = (player, board)
   | makeMove (Move pos) (player, board) =
     let
 	val positionsToTurn = positionsToTurn pos (player, board)
     in
-	if null positionsToTurn then raise ILLEGAL_MOVE (player, (Move pos))
-	else (otherPlayer player, (updateBoardMultiplePositions (pos :: positionsToTurn) (player, board)))
+	if null positionsToTurn then raise IllegalMove (player, (Move pos))
+	else (player, (updateBoardMultiplePositions (pos :: positionsToTurn) (player, board)))
     end
 
 fun neighbors pos board =
@@ -161,11 +275,6 @@ fun neighbors pos board =
 fun isPositionTakenByPlayer player NONE = false
   | isPositionTakenByPlayer player (SOME p) = player = p
 
-fun isValidMove (player, board) Pass = raise ILLEGAL_MOVE (player, Pass)
-  | isValidMove (player, board) (Move pos) =
-    lookup pos board = (pos, NONE) andalso
-    List.exists (fn (_, p) => isPositionTakenByPlayer (otherPlayer player) p) (neighbors pos board)
-
 fun findAllPositionsTakenByPlayer (player, board) =
     let
 	fun findAllPositionsTakenByPlayerInRow row =
@@ -183,22 +292,43 @@ fun findAllFreePositionsWithNeighbor (player, board) =
 	List.map (fn (pos, field) => pos) freeFieldsWithNeighbor
     end
 
-fun isLegalMove player pos board = not (null (positionsToTurn pos (player, board)))
+fun isLegalMove pos (player, board) = not (null (positionsToTurn pos (player, board)))
 
 fun findAllAvailableMoves (player, board) =
     let
-	val availablePositions = findAllFreePositionsWithNeighbor ((otherPlayer player), board)
+	val availablePositions =
+	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (otherPlayer player, board))
     in
-	List.filter (fn pos => isLegalMove player pos board) availablePositions
+	List.filter (fn pos => isLegalMove pos (player, board)) availablePositions
     end
 
 fun think ((player, board), previousMove, timeLeft) =
     let
-	val availablePositions = findAllAvailableMoves (player, board)
-	val newPosition = List.nth (availablePositions, List.length availablePositions div 2)
-	val move = Move newPosition
+	val (_, newBoard) = makeMove previousMove (otherPlayer player, board)
+	val availablePositions = findAllAvailableMoves (player, newBoard)
+	val move = if null availablePositions then Pass else (Move (List.nth (availablePositions, length availablePositions div 2)))
     in
-	(move, makeMove move (player, board))
+	(move, makeMove move (player, newBoard))
     end
+
+(* ========================= *)
+(* Functions to print boards *)
+(* ========================= *)
+
+fun playerOptionToString NONE = "."
+  | playerOptionToString (SOME Black) = "x"
+  | playerOptionToString (SOME White) = "o"
+
+fun rowToString row =
+    Vector.foldr (fn ((i, optionalPlayer), restOfRow) => (if i < 0 then "" else playerOptionToString optionalPlayer) ^ restOfRow)
+    ""
+    row
+
+fun rowsToString rows =
+    Vector.foldr (fn (row, rows) => if rowToString row = "" then rows else (rowToString row ^ "\n" ^ rows)) "" rows
+
+fun boardToString (player, board) =
+    rowsToString board ^ playerOptionToString (SOME player) ^ " to move"
+
 
 end;
