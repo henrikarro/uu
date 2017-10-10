@@ -264,19 +264,23 @@ fun evaluateBoard (player, board) =
     let
 	val numPositionsTakenByPlayer = length (findAllPositionsTakenByPlayer (player, board))
 	val numPositionsTakenByOpponent = length (findAllPositionsTakenByPlayer (nextPlayer player, board))
+	val totalSideLengthFromCorners = totalSideLengthFromCorners (player, board)
+	val score = numPositionsTakenByPlayer - numPositionsTakenByOpponent + totalSideLengthFromCorners * 50
     in
-	if numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 then
-	    if numPositionsTakenByPlayer > numPositionsTakenByOpponent then 1000
-	    else if numPositionsTakenByPlayer < numPositionsTakenByOpponent then ~1000
+	if numPositionsTakenByOpponent = 0 then score + 2000
+	else if numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 then
+	    if numPositionsTakenByPlayer > numPositionsTakenByOpponent then score + 1000
+	    else if numPositionsTakenByPlayer < numPositionsTakenByOpponent then score - 1000
 	    else 0
 	else
-	    (numPositionsTakenByPlayer - numPositionsTakenByOpponent) * 1 +
-	    (totalSideLengthFromCorners (player, board)) * 50
+	    score
     end
 
 (* ===================== *)
 (* The Negamax algorithm *)
 (* ===================== *)
+
+val minScore = ~10000000
 
 fun negamax depth color (player, board) =
     let
@@ -286,7 +290,7 @@ fun negamax depth color (player, board) =
 		val boards = map (fn move => #2 (makeMove move (player, board))) moves
 		val scores = map (fn board => ~(negamax (depth - 1) (~color) (nextPlayer player, board))) boards
 	    in
-		foldl Int.max (~1000) scores
+		foldl Int.max minScore scores
 	    end
 	val legalPositions = findAllLegalPositions (player, board)
     in
@@ -308,7 +312,7 @@ fun findBestPosition positions (player, board) =
     let
 	val bestPositionAndScore =
 	    foldl (fn ((pos1, score1), (pos2, score2)) => if score1 > score2 then (pos1, score1) else (pos2, score2))
-		  (~1, ~10000)
+		  (~1, minScore)
 		  (evaluatePositions positions (player, board));
     in
 	#1 bestPositionAndScore
