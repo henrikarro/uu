@@ -71,13 +71,12 @@ val dummyNode = (~1, NONE);
 fun createRow n =
     let
 	fun createRow' n =
-	    map (fn i =>
-		    if i = 28 orelse i = 35 then (i, SOME Black)
-		    else if (i = 27 orelse i = 36) then (i, SOME White)
-		    else (i, NONE))
+	    map (fn pos =>
+		    if pos = 28 orelse pos = 35 then (pos, SOME Black)
+		    else if (pos = 27 orelse pos = 36) then (pos, SOME White)
+		    else (pos, NONE))
 		(between n (n + 7))
     in
-	(*[dummyNode] @ [createRow' n] @ [dummyNode]*)
 	(dummyNode :: createRow' n) @ [dummyNode]
     end
 
@@ -195,7 +194,8 @@ fun isPositionTakenByPlayer player NONE = false
 fun findAllPositionsTakenByPlayer (player, board) =
     let
 	fun findAllPositionsTakenByPlayerInRow row =
-	    Vector.foldl (fn ((i, field), rest) => if isPositionTakenByPlayer player field then (i, field) :: rest else rest) [] row
+	    Vector.foldl
+		(fn ((pos, field), rest) => if isPositionTakenByPlayer player field then (pos, field) :: rest else rest) [] row
     in
 	Vector.foldl (fn (row, rest) => findAllPositionsTakenByPlayerInRow row @ rest) [] board
     end
@@ -222,24 +222,6 @@ fun findAllLegalPositions (player, board) =
 (* =============================== *)
 (* Functions for evaluating boards *)
 (* =============================== *)
-
-fun hasWon (player, board) =
-    let
-	val numPositionsTakenByPlayer = length (findAllPositionsTakenByPlayer (player, board))
-	val numPositionsTakenByOpponent = length (findAllPositionsTakenByPlayer (nextPlayer player, board))
-    in
-	numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 andalso numPositionsTakenByPlayer > numPositionsTakenByOpponent
-    end
-
-fun numCornersTakenByPlayer (player, board) =
-    let
-	val (_, corner1) = lookupByRowAndColumn 1 1 board
-	val (_, corner2) = lookupByRowAndColumn 1 8 board
-	val (_, corner3) = lookupByRowAndColumn 8 1 board
-	val (_, corner4) = lookupByRowAndColumn 8 8 board
-    in
-	foldl op+ 0 (map (fn pos => if isPositionTakenByPlayer player pos then 1 else 0) [corner1, corner2, corner3, corner4])
-    end
 
 fun lineTakenByPlayer row col (player, board) updatePosition =
     let
@@ -290,9 +272,6 @@ fun evaluateBoard (player, board) =
 	else
 	    (numPositionsTakenByPlayer - numPositionsTakenByOpponent) * 1 +
 	    (totalSideLengthFromCorners (player, board)) * 50
-(*
-	    ((numCornersTakenByPlayer (player, board)) - (numCornersTakenByPlayer (nextPlayer player, board))) * 100
-*)
     end
 
 (* ===================== *)
@@ -347,8 +326,7 @@ fun think ((player, board), previousMove, timeLeft) =
 	    if null legalPositions then Pass
 	    else (Move (findBestPosition legalPositions (player, newBoard)))
     in
-	(print ("totalSideLengthFromCorners=" ^ Int.toString (totalSideLengthFromCorners (player, newBoard)) ^ "\n");
-	 (move, makeMove move (player, newBoard)))
+	(move, makeMove move (player, newBoard))
     end
 
 (* ========================= *)
@@ -360,7 +338,7 @@ fun playerOptionToString NONE = "."
   | playerOptionToString (SOME White) = "o"
 
 fun rowToString row =
-    Vector.foldr (fn ((i, optionalPlayer), restOfRow) => (if i < 0 then "" else playerOptionToString optionalPlayer) ^ restOfRow)
+    Vector.foldr (fn ((pos, field), restOfRow) => (if pos < 0 then "" else playerOptionToString field) ^ restOfRow)
     ""
     row
 
