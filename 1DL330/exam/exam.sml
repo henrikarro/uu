@@ -1,7 +1,31 @@
+(* Functional Programming 1DL330
+ * Take-Home Exam: An Articial Intelligence for Reversi
+ *
+ * Henrik Arro
+ *)
+
+(*
+ * The board is represented as a vector of row vectors where each cell contains the position of the
+ * cell on the board (0-63) and the contents (i.e., black, white or nothing). There is a border of
+ * dummy cells around the board, so the dimension of the board is 10x10. The dummy cells contain a
+ * position of -1, making it easy to filter them out when looking for neighbors of a cell.
+ *
+ * The search algorithm used is Negamax (https://en.wikipedia.org/wiki/Negamax). To make the code
+ * simpler, alpha beta pruning is not used: without it, it is much easier to use map and fold
+ * in the implementation. The time constraint of five minutes is ignored since the search depth is
+ * set so low (4) that the complete think time on my laptop is usually less than 20 seconds.
+ *
+ * The evaluation function is based on the importance of holding the corner positions and lines along
+ * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
+ * opponent. Least importantly, the number of positions held by the players is also compared.
+ *)
+
 structure Reversi_AI =
 struct
 
-type board = (int * player option) vector vector
+type field = player option
+type cell = (int * field)
+type board = cell vector vector
 type T = player * board
 
 val author = "Henrik Arro"
@@ -12,18 +36,35 @@ val nickname = "Hendrix"
 (* Miscellaneous helper functions *)
 (* ============================== *)
 
+(* between m n
+ * TYPE: int -> int -> int list
+ * PRE: true
+ * POST: list of the integers m .. n, if m <= n, otherwise the empty list
+ * SIDE EFFECTS:
+ * EXAMPLES: between 2 3 = [2, 3]; between 2 2 = [2]; between 3 2 = []
+ *)
+(* VARIANT: size of the set of integers between m and n *)
 fun between m n = if n < m then [] else m :: (between (m + 1) n);
 
+(* repeat x n
+ * TYPE: 'a -> int -> 'a list
+ * PRE: n >= 0
+ * POST: a list with x repeated n times
+ * SIDE EFFECTS:
+ * EXAMPLES: repeat "a" 0 = []; repeat 42 3 = [42, 42, 42];
+ *)
+(* VARIANT: n *)
 fun repeat x 0 = []
   | repeat x n = x :: repeat x (n - 1)
 
 (* insertUnique comp x xs
-   TYPE: ('a * 'a -> order) -> 'a -> 'a list -> 'a list
-   PRE: xs is sorted in ascending order according to comp
-   POST: the result of inserting x into xs, with any duplicates of x removed
-   SIDE EFFECTS:
-   EXAMPLES: insertUnique Int.compare 2 [1, 2, 2, 3, 3] = [1, 2, 3, 3];
+ * TYPE: ('a * 'a -> order) -> 'a -> 'a list -> 'a list
+ * PRE: xs is sorted in ascending order according to comp
+ * POST: the result of inserting x into xs, with any duplicates of x removed
+ * SIDE EFFECTS:
+ * EXAMPLES: insertUnique Int.compare 2 [1, 2, 2, 3, 3] = [1, 2, 3, 3];
  *)
+(* VARIANT: length of xs *)
 fun insertUnique comp x [] = [x]
   | insertUnique comp x (y::ys) =
     case comp (x, y) of
@@ -32,16 +73,26 @@ fun insertUnique comp x [] = [x]
       | GREATER => y :: (insertUnique comp x ys);
 
 (* sortWithDuplicatesRemoved comp xs
-   TYPE: ('a * 'a -> order) -> 'a list -> 'a list
-   PRE: true
-   POST: xs sorted in ascending order according to comp
-   SIDE EFFECTS:
-   EXAMPLES: sortWithDuplicatesRemoved Int.compare [3, 1, 1, 2, 3, 1, 1, 2, 2, 2] = [1, 2, 3];
+ * TYPE: ('a * 'a -> order) -> 'a list -> 'a list
+ * PRE: true
+ * POST: xs sorted in ascending order according to comp
+ * SIDE EFFECTS:
+ * EXAMPLES: sortWithDuplicatesRemoved Int.compare [3, 1, 1, 2, 3, 1, 1, 2, 2, 2] = [1, 2, 3];
  *)
+(* VARIANT: length of xs *)
 fun sortWithDuplicatesRemoved comp [] = []
   | sortWithDuplicatesRemoved comp (x::xs) = insertUnique comp x (sortWithDuplicatesRemoved comp xs);
 
+(* Used to generate seeds used by nextRandom. *)
 val randomSeedTimer = Timer.totalRealTimer ()
+
+(* nextRandom n
+ * TYPE: int -> int
+ * PRE: n > 0
+ * POST: a pseudorandom number in the range 0 .. n-1
+ * SIDE EFFECTS: exception Div if n = 0
+ * EXAMPLES: nextRandom 1 = 0; nextRandom 2 = 0; nextRandom 2 = 1;
+ *)
 (* Inspired by nextrandom at https://www.cl.cam.ac.uk/~lp15/MLbook/programs/sample3.sml *)
 fun nextRandom max =
     let
@@ -57,8 +108,16 @@ fun nextRandom max =
 	round r mod max
     end
 
+(* Exception signalling that player was not allowed to make move. *)
 exception IllegalMove of player * move
 
+(* nextPlayer player
+ * TYPE: player -> player
+ * PRE: true
+ * POST: the player whose turn it is after player
+ * SIDE EFFECTS:
+ * EXAMPLES: nextPlayer Black = White; nextPlayer White = Black;
+ *)
 fun nextPlayer Black = White
   | nextPlayer White = Black
 
@@ -66,8 +125,16 @@ fun nextPlayer Black = White
 (* Functions to create an empty board *)
 (* ================================== *)
 
-val dummyNode = (~1, NONE);
+(* The value of the border positions of the board *)
+val dummyCell : cell = (~1, NONE);
 
+(* createRow n
+ * TYPE: int -> cell list
+ * PRE: true
+ * POST: a list of 8 empty cells with positions n .. n+7, surrounded by dummy cells, in total 10 cells
+ * SIDE EFFECTS:
+ * EXAMPLES: createRow 8 [(~1, NONE), (8, NONE), (9, NONE), ..., (15, NONE), (~1, NONE)];
+ *)
 fun createRow n =
     let
 	fun createRow' n =
@@ -77,12 +144,13 @@ fun createRow n =
 		    else (pos, NONE))
 		(between n (n + 7))
     in
-	(dummyNode :: createRow' n) @ [dummyNode]
+	(dummyCell :: createRow' n) @ [dummyCell]
     end
 
-val emptyBoard =
+(* A board with 10x10 cells, with dummy cells around the edges, and with empty cells with positions 0 .. 63 internally *)
+val emptyBoard : board =
     Vector.fromList
-	[Vector.fromList (repeat dummyNode 10),
+	[Vector.fromList (repeat dummyCell 10),
 	 Vector.fromList (createRow 0),
 	 Vector.fromList (createRow 8),
 	 Vector.fromList (createRow 16),
@@ -91,28 +159,69 @@ val emptyBoard =
 	 Vector.fromList (createRow 40),
 	 Vector.fromList (createRow 48),
 	 Vector.fromList (createRow 56),
-	 Vector.fromList (repeat dummyNode 10)]
+	 Vector.fromList (repeat dummyCell 10)]
 
+(* init player
+ * TYPE: player -> T
+ * PRE: true
+ * POST: a starting state for a game where the computer plays as player
+ *)
+fun init p : T = (p, emptyBoard)
 
-fun init p = (p, emptyBoard)
 
 (* ====================================== *)
 (* Lookup and update functions for boards *)
 (* ====================================== *)
 
-fun lookupByRowAndColumn row col board =
+(* lookupByRowAndColumn row col board
+ * TYPE: int -> int -> board -> cell
+ * PRE: 0 <= row < 10 and 0 <= col < 10
+ * POST: the cell at the given row and column of board
+ * SIDE EFFECTS: Exception Subscript if row or column are out of range
+ * EXAMPLES: lookupByRowAndColumn 2 3 emptyBoard = (10, NONE);
+ *)
+fun lookupByRowAndColumn row col (board : board) =
     let
 	val row = Vector.sub (board, row)
     in
 	Vector.sub (row, col)
     end
 
-fun rowNum pos = if pos < 0 orelse pos > 63 then raise Domain else pos div 8 + 1
-fun colNum pos = if pos < 0 orelse pos > 63 then raise Domain else pos mod 8 + 1;
+(* rowNum pos
+ * TYPE: int -> int
+ * PRE: 0 <= pos < 64
+ * POST: the row number corresponding to position pos
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: rowNum 0 = 1; rowNum 15 = 2; rowNum 63 = 8;
+ *)
+fun rowNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos div 8 + 1
 
+(* colNum pos
+ * TYPE: int -> int
+ * PRE: 0 <= pos < 64
+ * POST: the column number corresponding to position pos
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: colNum 0 = 1; colNum 15 = 8; colNum 63 = 8;
+ *)
+fun colNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos mod 8 + 1;
+
+(* lookup pos board
+ * TYPE: int -> board -> cell
+ * PRE: 0 <= pos < 64
+ * POST: the cell at position pos of board
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: lookup 10 emptyBoard = (10, NONE);
+ *)
 fun lookup pos board = lookupByRowAndColumn (rowNum pos) (colNum pos) board;
 
-fun updateBoard pos (player, board) =
+(* updateBoard pos (player, board)
+ * TYPE: int -> player * board -> board
+ * PRE: 0 <= pos < 64
+ * POST: a board where the cell with position pos is owned by player
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: lookup 42 (updateBoard 42 (Black, emptyBoard)) = (42, SOME Black);
+ *)
+fun updateBoard pos (player, board : board) : board =
     let
 	val row = Vector.sub (board, rowNum pos)
 	val newRow = Vector.update (row, colNum pos, (pos, (SOME player)))
@@ -120,6 +229,13 @@ fun updateBoard pos (player, board) =
 	Vector.update (board, rowNum pos, newRow)
     end
 
+(* updateBoardMultiplePositions positions (player, board)
+ * TYPE: int list -> player * board -> board
+ * PRE: foreach pos in positions, 0 <= pos < 64
+ * POST: a board where the cells with positions in the list of positions is owned by player
+ * SIDE EFFECTS: Exception Subscript if any position in positions is out of range
+ * EXAMPLES: updateBoardMultiplePositions [1, 2, 3] (Black, emptyBoard);
+ *)
 fun updateBoardMultiplePositions [] (player, board) = board
   | updateBoardMultiplePositions (pos::otherPositions) (player, board) =
     let
@@ -128,26 +244,48 @@ fun updateBoardMultiplePositions [] (player, board) = board
 	updateBoardMultiplePositions otherPositions (player, newBoard)
     end
 
+
 (* ================================= *)
 (* Functions for finding legal moves *)
 (* ================================= *)
 
-fun searchOneDirection row col (player, board) updatePosition =
-    let
-	fun search (newRow, newColumn) positionsToTurn =
-	    let
-		val (pos, field) = lookupByRowAndColumn newRow newColumn board
-	    in
-		if field = NONE orelse pos < 0 then []
-		else if field = (SOME player) then positionsToTurn
-		else search (updatePosition (newRow, newColumn)) (pos :: positionsToTurn)
-	    end
-    in
-	search (updatePosition (row, col)) []
-    end
-
+(* positionsToTurn pos (player, board)
+ * TYPE: int -> player * board -> int list
+ * PRE: 0 <= pos < 64
+ * POST: a list of positions of pieces that would be turned if player places a piece at position pos of board
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: positionsToTurn 26 (Black, emptyBoard) = [27];
+ *)
 fun positionsToTurn pos (player, board) =
     let
+	(* searchOneDirection row col (player, board) f
+	 * TYPE: int -> int -> player * board -> (int * int -> int * int) -> int list
+	 * PRE: 0 <= row < 10 and 0 <= col < 10 and
+	 *      if f (row, col) = (r, c) then 0 <= r < 10 and 0 <= c < 10
+	 * POST: a list of positions of pieces that player could turn if a piece is placed at row, col of board,
+	 *       looking in the direction specified by f, which is assumed to increment or decrement
+	 *       its arguments by 1
+         * SIDE EFFECTS: Exception Subscript if row, col or f (row, col) are out of range
+	 * EXAMPLES: searchOneDirection 4 3 (Black, emptyBoard) (fn (r,c)=>(r,c+1)) = [27];
+	 *)
+	(* VARIANT: is complex, but normal termination is guaranteed if the f function
+	 *          updates the position so that it eventually reaches a) an empty cell,
+	 *          b) a dummy (border) cell, or c) a cell owned by player. In other
+	 *          cases, a Subscript exception is raised *)
+	fun searchOneDirection row col (player, board) updatePosition =
+	    let
+		fun search (newRow, newColumn) positionsToTurn =
+		    let
+			val (pos, field) = lookupByRowAndColumn newRow newColumn board
+		    in
+			if field = NONE orelse pos < 0 then []
+			else if field = (SOME player) then positionsToTurn
+			else search (updatePosition (newRow, newColumn)) (pos :: positionsToTurn)
+		    end
+	    in
+		search (updatePosition (row, col)) []
+	    end
+
 	val row = rowNum pos
 	val col = colNum pos
     in
@@ -161,16 +299,33 @@ fun positionsToTurn pos (player, board) =
 	(searchOneDirection row col (player, board) (fn (row, col) => (row + 1, col + 1)))
     end
 
-fun makeMove Pass (player, board) = (player, board)
+(* makeMove move (player, board)
+ * TYPE: move -> player * board -> board
+ * PRE: if move = (Move pos) then the move must be legal (at least one piece is turned),
+ *      and in range (0 <= pos < 64)
+ * POST: a board with the resulting of making move: a pass leaves the board unchanged,
+ *       a normal move will turn a number of pieces
+ * SIDE EFFECTS: Exception IllegalMove (player, move) if move is not a pass and no pieces would be turned
+ *               Exception Subscript if move contains a position that is out of range
+ * EXAMPLES: makeMove (Move 26) (Black, emptyBoard); (* places a black piece at 26 and turns 27 *)
+ *)
+fun makeMove Pass (player, board) = board
   | makeMove (Move pos) (player, board) =
     let
 	val positionsToTurn = positionsToTurn pos (player, board)
     in
 	if null positionsToTurn then raise IllegalMove (player, (Move pos))
-	else (player, (updateBoardMultiplePositions (pos :: positionsToTurn) (player, board)))
+	else updateBoardMultiplePositions (pos :: positionsToTurn) (player, board)
     end
 
-fun neighbors pos board =
+(* neighbors pos board
+ * TYPE: int -> board -> cell list
+ * PRE: 0 <= pos < 64
+ * POST: a list of (up to) 8 cells that are neighbors to the cell at position pos
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: neighbors 1 emptyBoard = [(0, NONE), (2, NONE), (8, NONE), (9, NONE), (10, NONE)];
+ *)
+fun neighbors pos (board : board) : cell list =
     let
 	val previousRow = Vector.sub (board, rowNum pos - 1)
 	val neighborsPreviousRow = [Vector.sub (previousRow, colNum pos - 1),
@@ -188,31 +343,67 @@ fun neighbors pos board =
 	List.filter (fn (i, _) => i >= 0) allNeighbors
     end
 
-fun isPositionTakenByPlayer player NONE = false
-  | isPositionTakenByPlayer player (SOME p) = player = p
+(* isFieldTakenByPlayer player field
+ * TYPE: player -> field -> bool
+ * PRE: true
+ * POST: true iff field is owned by player
+ * SIDE EFFECTS:
+ * EXAMPLES: isFieldTakenByPlayer Black NONE = false; isFieldTakenByPlayer Black (SOME White) = false;
+ *           isFieldTakenByPlayer Black (SOME Black) = true;
+ *)
+fun isFieldTakenByPlayer (player : player) (NONE : field) = false
+  | isFieldTakenByPlayer player (SOME p) = player = p
 
-fun findAllPositionsTakenByPlayer (player, board) =
+(* findAllCellsTakenByPlayer (player, board)
+ * TYPE: player * board -> cell list
+ * PRE: true
+ * POST: a list of all cells owned by player in board
+ * SIDE EFFECTS:
+ * EXAMPLES: findAllCellsTakenByPlayer (Black, emptyBoard) = [(35, SOME Black), (28, SOME Black)];
+ *)
+fun findAllCellsTakenByPlayer (player, board : board) : cell list =
     let
-	fun findAllPositionsTakenByPlayerInRow row =
+	fun findAllCellsTakenByPlayerInRow row =
 	    Vector.foldl
-		(fn ((pos, field), rest) => if isPositionTakenByPlayer player field then (pos, field) :: rest else rest) [] row
+		(fn ((pos, field), rest) => if isFieldTakenByPlayer player field then (pos, field) :: rest else rest) [] row
     in
-	Vector.foldl (fn (row, rest) => findAllPositionsTakenByPlayerInRow row @ rest) [] board
+	Vector.foldl (fn (row, rest) => findAllCellsTakenByPlayerInRow row @ rest) [] board
     end
 
-fun findAllFreePositionsWithNeighbor (player, board) =
-    let
-	val positionsTakenByPlayer = findAllPositionsTakenByPlayer (player, board)
-	val fieldsWithNeighbor = foldl (fn ((pos, field), rest) => neighbors pos board @ rest) [] positionsTakenByPlayer
-	val freeFieldsWithNeighbor = List.filter (fn (pos, field) => field = NONE) fieldsWithNeighbor
-    in
-	List.map (fn (pos, field) => pos) freeFieldsWithNeighbor
-    end
-
+(* isLegalMove pos (player, board)
+ * TYPE: int -> player * board -> bool
+ * PRE: 0 <= pos < 64
+ * POST: true iff it is legal for player to put a piece at position pos of board
+ * SIDE EFFECTS: Exception Subscript if pos is out of range
+ * EXAMPLES: isLegalMove 19 (Black, emptyBoard) = true; isLegalMove 19 (White, emptyBoard) = false;
+ *)
 fun isLegalMove pos (player, board) = not (null (positionsToTurn pos (player, board)))
 
+(* findAllLegalPositions (player, board)
+ * TYPE: player * board -> int list
+ * PRE: true
+ * POST: a list of all positions where it is legal for player to put a piece in board
+ * SIDE EFFECTS:
+ * EXAMPLES: findAllLegalPositions (Black, emptyBoard) = [19, 26, 37, 44];
+ *)
 fun findAllLegalPositions (player, board) =
     let
+	(* findAllFreePositionsWithNeighbor (player, board)
+	 * TYPE: player * board -> int list
+	 * PRE: true
+	 * POST: a list of all positions of free cells neighboring cells owned by player in board
+	 * SIDE EFFECTS:
+	 * EXAMPLES: findAllFreePositionsWithNeighbor (Black, emptyBoard) = [19, 20, 21, 29, 37, 26, 34, 42, 43, 44];
+	 *)
+	fun findAllFreePositionsWithNeighbor (player, board) =
+	    let
+		val positionsTakenByPlayer = findAllCellsTakenByPlayer (player, board)
+		val fieldsWithNeighbor = foldl (fn ((pos, field), rest) => neighbors pos board @ rest) [] positionsTakenByPlayer
+		val freeFieldsWithNeighbor = List.filter (fn (pos, field) => field = NONE) fieldsWithNeighbor
+	    in
+		List.map (fn (pos, field) => pos) freeFieldsWithNeighbor
+	    end
+
 	val availablePositions =
 	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (nextPlayer player, board))
     in
@@ -237,19 +428,6 @@ fun lineTakenByPlayer row col (player, board) updatePosition =
 	lineLength (row, col) []
     end
 
-fun numSidesTakenByPlayer (player, board) =
-    let
-	val topRow = searchOneDirection 1 1 (player, board) (fn (row, col) => (row, col + 1))
-	val bottomRow = searchOneDirection 8 1 (player, board) (fn (row, col) => (row, col + 1))
-	val leftColumn = searchOneDirection 1 1 (player, board) (fn (row, col) => (row + 1, col))
-	val rightColumn = searchOneDirection 1 8 (player, board) (fn (row, col) => (row + 1, col))
-    in
-	(if length topRow = 8 then 1 else 0) +
-	(if length bottomRow = 8 then 1 else 0) +
-	(if length leftColumn = 8 then 1 else 0) +
-	(if length rightColumn = 8 then 1 else 0)
-    end
-
 fun totalSideLengthFromCorners (player, board) =
     length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row + 1, col))) +
     length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row, col + 1))) +
@@ -262,15 +440,15 @@ fun totalSideLengthFromCorners (player, board) =
 
 fun evaluateBoard (player, board) =
     let
-	val numPositionsTakenByPlayer = length (findAllPositionsTakenByPlayer (player, board))
-	val numPositionsTakenByOpponent = length (findAllPositionsTakenByPlayer (nextPlayer player, board))
+	val numCellsTakenByPlayer = length (findAllCellsTakenByPlayer (player, board))
+	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (nextPlayer player, board))
 	val totalSideLengthFromCorners = totalSideLengthFromCorners (player, board)
-	val score = numPositionsTakenByPlayer - numPositionsTakenByOpponent + totalSideLengthFromCorners * 50
+	val score = numCellsTakenByPlayer - numCellsTakenByOpponent + totalSideLengthFromCorners * 50
     in
-	if numPositionsTakenByOpponent = 0 then score + 2000
-	else if numPositionsTakenByPlayer + numPositionsTakenByOpponent = 64 then
-	    if numPositionsTakenByPlayer > numPositionsTakenByOpponent then score + 1000
-	    else if numPositionsTakenByPlayer < numPositionsTakenByOpponent then score - 1000
+	if numCellsTakenByOpponent = 0 then score + 2000
+	else if numCellsTakenByPlayer + numCellsTakenByOpponent = 64 then
+	    if numCellsTakenByPlayer > numCellsTakenByOpponent then score + 1000
+	    else if numCellsTakenByPlayer < numCellsTakenByOpponent then score - 1000
 	    else 0
 	else
 	    score
@@ -287,7 +465,7 @@ fun negamax depth color (player, board) =
 	fun handleChildren positions =
 	    let
 		val moves = map (fn pos => Move pos) positions
-		val boards = map (fn move => #2 (makeMove move (player, board))) moves
+		val boards = map (fn move => makeMove move (player, board)) moves
 		val scores = map (fn board => ~(negamax (depth - 1) (~color) (nextPlayer player, board))) boards
 	    in
 		foldl Int.max minScore scores
@@ -302,7 +480,7 @@ fun negamax depth color (player, board) =
 fun evaluatePositions positions (player, board) =
     let
 	val moves = map (fn pos => Move pos) positions
-	val boards = map (fn move => #2 (makeMove move (player, board))) moves
+	val boards = map (fn move => makeMove move (player, board)) moves
 	val scores = map (fn board => negamax 4 1 (player, board)) boards
     in
 	ListPair.zip (positions, scores)
@@ -311,7 +489,10 @@ fun evaluatePositions positions (player, board) =
 fun findBestPosition positions (player, board) =
     let
 	val bestPositionAndScore =
-	    foldl (fn ((pos1, score1), (pos2, score2)) => if score1 > score2 then (pos1, score1) else (pos2, score2))
+	    foldl (fn ((pos1, score1), (pos2, score2)) =>
+		      if score1 > score2 then (pos1, score1)
+		      else if score1 = score2 then if (nextRandom 2) = 0 then (pos1, score1) else (pos2, score2)
+		      else (pos2, score2))
 		  (~1, minScore)
 		  (evaluatePositions positions (player, board));
     in
@@ -324,13 +505,13 @@ fun findBestPosition positions (player, board) =
 
 fun think ((player, board), previousMove, timeLeft) =
     let
-	val (_, newBoard) = makeMove previousMove (nextPlayer player, board)
+	val newBoard = makeMove previousMove (nextPlayer player, board)
 	val legalPositions = findAllLegalPositions (player, newBoard)
 	val move =
 	    if null legalPositions then Pass
 	    else (Move (findBestPosition legalPositions (player, newBoard)))
     in
-	(move, makeMove move (player, newBoard))
+	(move, (player, makeMove move (player, newBoard)))
     end
 
 (* ========================= *)
