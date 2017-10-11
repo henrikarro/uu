@@ -128,15 +128,15 @@ fun nextRandom max =
 (* Exception signalling that player was not allowed to make move. *)
 exception IllegalMove of player * move
 
-(* nextPlayer player
+(* opponent player
  * TYPE: player -> player
  * PRE: true
- * POST: the player whose turn it is after player
+ * POST: the opponent of player
  * SIDE EFFECTS:
- * EXAMPLES: nextPlayer Black = White; nextPlayer White = Black;
+ * EXAMPLES: opponent Black = White; opponent White = Black;
  *)
-fun nextPlayer Black = White
-  | nextPlayer White = Black
+fun opponent Black = White
+  | opponent White = Black
 
 
 (* ================================== *)
@@ -427,7 +427,7 @@ fun findAllLegalPositions (player, board) =
 	    end
 
 	val availablePositions =
-	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (nextPlayer player, board))
+	    sortWithDuplicatesRemoved Int.compare (findAllFreePositionsWithNeighbor (opponent player, board))
     in
 	List.filter (fn pos => isLegalMove pos (player, board)) availablePositions
     end
@@ -501,9 +501,9 @@ fun totalSideLengthFromCorners (player, board) =
 fun evaluateBoard (player, board) =
     let
 	val numCellsTakenByPlayer = length (findAllCellsTakenByPlayer (player, board))
-	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (nextPlayer player, board))
+	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (opponent player, board))
 	val sideLengthFromCorners = totalSideLengthFromCorners (player, board)
-	val sideLengthFromCornersForOpponent = totalSideLengthFromCorners (nextPlayer player, board)
+	val sideLengthFromCornersForOpponent = totalSideLengthFromCorners (opponent player, board)
 	val score = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 10 +
 		    (sideLengthFromCorners - sideLengthFromCornersForOpponent) * 50
     in
@@ -539,7 +539,7 @@ fun negamax depth color (player, board) =
 	    let
 		val moves = map (fn pos => Move pos) positions
 		val boards = map (fn move => makeMove move (player, board)) moves
-		val scores = map (fn board => ~(negamax (depth - 1) (~color) (nextPlayer player, board))) boards
+		val scores = map (fn board => ~(negamax (depth - 1) (~color) (opponent player, board))) boards
 	    in
 		foldl Int.max minScore scores
 	    end
@@ -601,12 +601,12 @@ fun findBestPosition positions (player, board) =
  * PRE: previousMove is legal for the opponent given board
  * POST: (move, (player, board')) where move is the chosen move for player on the board
  *       that results after making previousMove for the opponent on board
- * SIDE EFFECTS: IllegalMove (nextPlayer player, previousMove) if previousMove is illegal
+ * SIDE EFFECTS: IllegalMove (opponent player, previousMove) if previousMove is illegal
  *               for the opponent on the given board
  *)
 fun think ((player, board) : T, previousMove, timeLeft : Time.time) =
     let
-	val newBoard = makeMove previousMove (nextPlayer player, board)
+	val newBoard = makeMove previousMove (opponent player, board)
 	val legalPositions = findAllLegalPositions (player, newBoard)
 	val move =
 	    if null legalPositions then Pass
