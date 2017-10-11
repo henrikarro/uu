@@ -13,10 +13,10 @@
  * The search algorithm used is Negamax (https://en.wikipedia.org/wiki/Negamax). To make the code
  * simpler, alpha beta pruning is not used: without it, it is much easier to use map and fold
  * in the implementation. The time constraint of five minutes is ignored since the search depth is
- * set so low (4) that the total think time on my laptop is usually less than 20 seconds. If we
- * wanted to take the remaining time into account, we could for example decrease the search depth
- * when the time starts running out, perhaps going into complete random mode if we get into a
- * real hurry.
+ * set so low (4) that the total think time on the machines svedberg and linne is usually less than
+ * 40 seconds. If we wanted to take the remaining time into account, we could for example decrease
+ * the search depth when the time starts running out, perhaps going into complete random mode if we
+ * get into a real hurry.
  *
  * The evaluation function is based on the importance of holding the corner positions and lines along
  * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
