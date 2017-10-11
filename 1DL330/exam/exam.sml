@@ -597,7 +597,7 @@ fun findBestPosition positions (player, board) =
 (* ================ *)
 
 (* think ((player, board), previousMove, timeLeft)
- * TYPE: think T * move * Time.time -> move * T
+ * TYPE: T * move * Time.time -> move * T
  * PRE: previousMove is legal for the opponent given board
  * POST: (move, (player, board')) where move is the chosen move for player on the board
  *       that results after making previousMove for the opponent on board
