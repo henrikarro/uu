@@ -13,10 +13,10 @@
  * The search algorithm used is Negamax (https://en.wikipedia.org/wiki/Negamax). To make the code
  * simpler, alpha beta pruning is not used: without it, it is much easier to use map and fold
  * in the implementation. The time constraint of five minutes is ignored since the search depth is
- * set so low (4) that the total think time on the machines svedberg and linne is usually less than
- * 40 seconds. If we wanted to take the remaining time into account, we could for example decrease
- * the search depth when the time starts running out, perhaps going into complete random mode if we
- * get into a real hurry.
+ * set so low (4 or 6, depending on where in the game we are) that the total think time on the
+ * machines svedberg and linne is usually less than a minute. If we wanted to take the remaining
+ * time into account, we could for example decrease the search depth when the time starts running
+ * out, perhaps going into complete random mode if we get into a real hurry.
  *
  * The evaluation function is based on the importance of holding the corner positions and lines along
  * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
@@ -392,6 +392,17 @@ fun findAllCellsTakenByPlayer (player, board : board) : cell list =
 	Vector.foldl (fn (row, rest) => findAllCellsTakenByPlayerInRow row @ rest) [] board
     end
 
+(* numTakenFields board
+ * TYPE: board -> int
+ * PRE: true
+ * POST: the number of fields in board that are not free, i.e., taken by either black or white
+ * SIDE EFFECTS:
+ * EXAMPLES: numTakenFields emptyBoard = 4;
+ *)
+fun numTakenFields board =
+    length (findAllCellsTakenByPlayer (Black, board)) +
+    length (findAllCellsTakenByPlayer (White, board));
+
 (* isLegalMove pos (player, board)
  * TYPE: int -> player * board -> bool
  * PRE: 0 <= pos < 64
@@ -431,6 +442,16 @@ fun findAllLegalPositions (player, board) =
     in
 	List.filter (fn pos => isLegalMove pos (player, board)) availablePositions
     end
+
+(* isFinalPosition board
+ * TYPE: board -> bool
+ * PRE: true
+ * POST: true iff the board is in a final position where neither player can make a move
+ * SIDE EFFECTS:
+ * EXAMPLES: isFinalPosition emptyBoard = false;
+ *)
+fun isFinalPosition board =
+    null (findAllLegalPositions (Black, board)) andalso null (findAllLegalPositions (White, board));
 
 
 (* =============================== *)
@@ -504,17 +525,17 @@ fun evaluateBoard (player, board) =
 	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (opponent player, board))
 	val sideLengthFromCorners = totalSideLengthFromCorners (player, board)
 	val sideLengthFromCornersForOpponent = totalSideLengthFromCorners (opponent player, board)
-	val score = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 10 +
-		    (sideLengthFromCorners - sideLengthFromCornersForOpponent) * 50
+	val scoreFromCells = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 10
+	val scoreFromLines = (sideLengthFromCorners - sideLengthFromCornersForOpponent) * 50
     in
-	if numCellsTakenByOpponent = 0 then score + 2000
-	else if numCellsTakenByPlayer = 0 then score - 2000
-	else if numCellsTakenByPlayer + numCellsTakenByOpponent = 64 then
-	    if numCellsTakenByPlayer > numCellsTakenByOpponent then score + 1000
-	    else if numCellsTakenByPlayer < numCellsTakenByOpponent then score - 1000
+	if numCellsTakenByOpponent = 0 then 10000
+	else if numCellsTakenByPlayer = 0 then ~10000
+	else if isFinalPosition board then
+	    if numCellsTakenByPlayer > numCellsTakenByOpponent then scoreFromCells + 2000
+	    else if numCellsTakenByPlayer < numCellsTakenByOpponent then scoreFromCells - 2000
 	    else 0
 	else
-	    score
+	    scoreFromCells + scoreFromLines
     end
 
 
@@ -525,30 +546,42 @@ fun evaluateBoard (player, board) =
 (* Used as negative infinity for scores *)
 val minScore = ~10000000
 
-(* negamax depth color (player, board)
- * TYPE: int -> int -> player * board -> int
- * PRE: depth >= 0, color in {1, -1} (1 for player, -1 for opponent)
- * POST: the score * color for the best position for player that the negamax algorithm can find
+(* negamax depth (player, board)
+ * TYPE: int -> player * board -> int
+ * PRE: depth >= 0
+ * POST: the score for the best position for player that the negamax algorithm can find
  *       using the given search depth starting from board
  * SIDE EFFECTS:
+ * NOTE: We do not have to use the color parameter described in the pseudocode at
+ *       https://en.wikipedia.org/wiki/Negamax since evaluateBoard does the evaluation
+ *       from the point of view of the current player.
  *)
 (* VARIANT: depth *)
-fun negamax depth color (player, board) =
+fun negamax depth (player, board) =
     let
 	fun handleChildren positions =
 	    let
-		val moves = map (fn pos => Move pos) positions
+		val moves = if (null positions) then [Pass] else map (fn pos => Move pos) positions
 		val boards = map (fn move => makeMove move (player, board)) moves
-		val scores = map (fn board => ~(negamax (depth - 1) (~color) (opponent player, board))) boards
+		val scores = map (fn board => ~(negamax (depth - 1) (opponent player, board))) boards
 	    in
 		foldl Int.max minScore scores
 	    end
+
 	val legalPositions = findAllLegalPositions (player, board)
     in
-	if depth = 0 orelse null legalPositions
-	then color * evaluateBoard (player, board)
+	if depth = 0 orelse isFinalPosition board
+	then evaluateBoard (player, board)
 	else handleChildren legalPositions
     end
+
+(* searchDepth board
+ * TYPE: board -> int
+ * PRE: true
+ * POST: the negamax search depth to use for the given board
+ * SIDE EFFECTCS:
+ *)
+fun searchDepth board = if numTakenFields board > 51 then 6 else 4;
 
 (* evaluatePositions positions (player, board)
  * TYPE: int list -> player * board -> (int * int) list
@@ -563,7 +596,7 @@ fun evaluatePositions positions (player, board) =
     let
 	val moves = map (fn pos => Move pos) positions
 	val boards = map (fn move => makeMove move (player, board)) moves
-	val scores = map (fn board => negamax 4 1 (player, board)) boards
+	val scores = map (fn board => ~(negamax (searchDepth board) (opponent player, board))) boards
     in
 	ListPair.zip (positions, scores)
     end
@@ -588,7 +621,7 @@ fun findBestPosition positions (player, board) =
 		  (~1, minScore)
 		  (evaluatePositions positions (player, board));
     in
-	#1 bestPositionAndScore
+	 #1 bestPositionAndScore
     end
 
 
