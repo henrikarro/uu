@@ -24,7 +24,7 @@
  *
  * I have occasionally added type annotations to values. This is just to make the compiler use
  * the type aliases (e.g., field, cell or board) instead of their basic types. It is not necessary,
- * but makes the signature that PolyML presents looks a lot cleaner. I have only used the type T in
+ * but makes the signature that PolyML presents look a lot cleaner. I have only used the type T in
  * functions that are specified in the assignment description, in all other cases I use the type
  * player * board instead since I think this makes the code easier to understand.
  *)
