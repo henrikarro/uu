@@ -22,7 +22,7 @@
  * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
  * opponent. Least importantly, the number of positions held by the players is also compared.
  *
- * I have occasionally added type annotations to variables. This is just to make the compiler use
+ * I have occasionally added type annotations to values. This is just to make the compiler use
  * the type aliases (e.g., field, cell or board) instead of their basic types. It is not necessary,
  * but makes the signature that PolyML presents looks a lot cleaner. I have only used the type T in
  * functions that are specified in the assignment description, in all other cases I use the type
