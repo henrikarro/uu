@@ -13,24 +13,41 @@
  * The search algorithm used is Negamax (https://en.wikipedia.org/wiki/Negamax). To make the code
  * simpler, alpha beta pruning is not used: without it, it is much easier to use map and fold
  * in the implementation. The time constraint of five minutes is ignored since the search depth is
- * set so low (4) that the complete think time on my laptop is usually less than 20 seconds.
+ * set so low (4) that the total think time on my laptop is usually less than 20 seconds. If we
+ * wanted to take the remaining time into account, we could for example decrease the search depth
+ * when the time starts running out, perhaps going into complete random mode if we get into a
+ * real hurry.
  *
  * The evaluation function is based on the importance of holding the corner positions and lines along
  * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
  * opponent. Least importantly, the number of positions held by the players is also compared.
+ *
+ * I have occasionally added type annotations to variables. This is just to make the compiler use
+ * the type aliases (e.g., field, cell or board) instead of their basic types. It is not necessary,
+ * but makes the signature that PolyML presents looks a lot cleaner. I have only used the type T in
+ * functions that are specified in the assignment description, in all other cases I use the type
+ * player * board instead since I think this makes the code easier to understand.
  *)
 
 structure Reversi_AI =
 struct
 
+(* The contents of a field on the board, i.e., empty, black or white *)
 type field = player option
+
+(* A cell contains the position (0 .. 63 or -1) of a field, and the field itself *)
 type cell = (int * field)
+
+(* A board is a vector of row vectors containing cells *)
 type board = cell vector vector
+
+(* The state of the machine: the player whose turn it is, and the board *)
 type T = player * board
 
 val author = "Henrik Arro"
 
 val nickname = "Hendrix"
+
 
 (* ============================== *)
 (* Miscellaneous helper functions *)
@@ -121,6 +138,7 @@ exception IllegalMove of player * move
 fun nextPlayer Black = White
   | nextPlayer White = Black
 
+
 (* ================================== *)
 (* Functions to create an empty board *)
 (* ================================== *)
@@ -179,6 +197,8 @@ fun init p : T = (p, emptyBoard)
  * POST: the cell at the given row and column of board
  * SIDE EFFECTS: Exception Subscript if row or column are out of range
  * EXAMPLES: lookupByRowAndColumn 2 3 emptyBoard = (10, NONE);
+ * NOTE: the coordinates of the "normal" board, i.e., without the border of dummy cells,
+ *       are 1-based, with row and col in the range 1 .. 8.
  *)
 fun lookupByRowAndColumn row col (board : board) =
     let
@@ -190,7 +210,7 @@ fun lookupByRowAndColumn row col (board : board) =
 (* rowNum pos
  * TYPE: int -> int
  * PRE: 0 <= pos < 64
- * POST: the row number corresponding to position pos
+ * POST: the row number (1 .. 8) corresponding to position pos
  * SIDE EFFECTS: Exception Subscript if pos is out of range
  * EXAMPLES: rowNum 0 = 1; rowNum 15 = 2; rowNum 63 = 8;
  *)
@@ -199,7 +219,7 @@ fun rowNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos div 8 
 (* colNum pos
  * TYPE: int -> int
  * PRE: 0 <= pos < 64
- * POST: the column number corresponding to position pos
+ * POST: the column number (1 .. 8) corresponding to position pos
  * SIDE EFFECTS: Exception Subscript if pos is out of range
  * EXAMPLES: colNum 0 = 1; colNum 15 = 8; colNum 63 = 8;
  *)
@@ -271,7 +291,9 @@ fun positionsToTurn pos (player, board) =
 	(* VARIANT: is complex, but normal termination is guaranteed if the f function
 	 *          updates the position so that it eventually reaches a) an empty cell,
 	 *          b) a dummy (border) cell, or c) a cell owned by player. In other
-	 *          cases, a Subscript exception is raised *)
+	 *          cases, a Subscript exception is raised. The only way this function
+	 *          will fail to terminate is if f is the identity function or otherwise
+	 *          keeps the row and column to a small number of position. *)
 	fun searchOneDirection row col (player, board) updatePosition =
 	    let
 		fun search (newRow, newColumn) positionsToTurn =
@@ -410,42 +432,83 @@ fun findAllLegalPositions (player, board) =
 	List.filter (fn pos => isLegalMove pos (player, board)) availablePositions
     end
 
+
 (* =============================== *)
 (* Functions for evaluating boards *)
 (* =============================== *)
 
-fun lineTakenByPlayer row col (player, board) updatePosition =
+(* totalSideLengthFromCorners (player, board)
+ * TYPE: player * board -> int
+ * PRE: true
+ * POST: the total number of pieces owned by player in the board, starting in any corner and going
+ *       along a side.
+ * SIDE EFFECTS:
+ * EXAMPLES: totalSideLengthFromCorners (Black, emptyBoard) = 0;
+ * NOTE: If player owns a complete side, it will be counted twice, since it will be counted from
+ *       both corners of the side. If the player owns the top row, for example, it will be counted
+ *       as 16, 8 starting from the top left corner, and 8 starting from the top right corner. This
+ *       is not a problem, or could even be a benefit, since the result is only used to give a rough
+ *       estimate of the strength of the position.
+ *)
+fun totalSideLengthFromCorners (player, board) =
     let
-	fun lineLength (newRow, newColumn) positionsTaken =
+	(* lineTakenByPlayer row col (player, board) f
+	 * TYPE: int -> int -> player * board -> (int * int -> int * int) -> int list
+	 * PRE: 0 <= row < 10 and 0 <= col < 10
+	 * POST: A list of positions of pieces owned by player starting at row, col of board, looking the
+	 *       direction specified by f, which is assumed to increment or decrement its arguments by 1
+	 * SIDE EFFECTS: Exception Subscript if row or col are out of range
+	 * EXAMPLES: lineTakenByPlayer 4 5 (Black, emptyBoard) (fn (r,c)=>(r,c+1)) = [28];
+	 *)
+	(* VARIANT: is complex, but normal completion is guaranteed if the f function updates
+	 *          the position so that it eventually reaches a cell not owned by player. In
+	 *          oher cases, a Subscrip exception is raised. The only way this function will
+	 *          fail to terminate is if f is the identity function or otherwise keeps the
+	 *          row and column to a small number of positions. *)
+	fun lineTakenByPlayer row col (player, board) updatePosition =
 	    let
-		val (pos, field) = lookupByRowAndColumn newRow newColumn board
+		fun lineLength (newRow, newColumn) positionsTaken =
+		    let
+			val (pos, field) = lookupByRowAndColumn newRow newColumn board
+		    in
+			if field = (SOME player)
+			then lineLength (updatePosition (newRow, newColumn)) (pos :: positionsTaken)
+			else positionsTaken
+		    end
 	    in
-		if field = (SOME player)
-		then lineLength (updatePosition (newRow, newColumn)) (pos :: positionsTaken)
-		else positionsTaken
+		lineLength (row, col) []
 	    end
     in
-	lineLength (row, col) []
+	length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row + 1, col))) +
+	length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row, col + 1))) +
+	length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row + 1, col))) +
+	length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row, col - 1))) +
+	length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row - 1, col))) +
+	length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row, col + 1))) +
+	length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row - 1, col))) +
+	length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row, col - 1)))
     end
 
-fun totalSideLengthFromCorners (player, board) =
-    length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row + 1, col))) +
-    length (lineTakenByPlayer 1 1 (player, board) (fn (row, col) => (row, col + 1))) +
-    length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row + 1, col))) +
-    length (lineTakenByPlayer 1 8 (player, board) (fn (row, col) => (row, col - 1))) +
-    length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row - 1, col))) +
-    length (lineTakenByPlayer 8 1 (player, board) (fn (row, col) => (row, col + 1))) +
-    length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row - 1, col))) +
-    length (lineTakenByPlayer 8 8 (player, board) (fn (row, col) => (row, col - 1)))
-
+(* evaluateBoard (player, board)
+ * TYPE: player * board -> int
+ * PRE: true
+ * POST: an estimate of the strength of the position for player on the board, the larger the number
+ *       the better for player. A negative number means the opponent has a stronger positions, zero
+ *       means an equal strength.
+ * SIDE EFFECTS:
+ * EXAMPLES: evaluateBoard (Black, emptyBoard) = 0; evaluateBoard (White, emptyBoard) = 0;
+ *)
 fun evaluateBoard (player, board) =
     let
 	val numCellsTakenByPlayer = length (findAllCellsTakenByPlayer (player, board))
 	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (nextPlayer player, board))
-	val totalSideLengthFromCorners = totalSideLengthFromCorners (player, board)
-	val score = numCellsTakenByPlayer - numCellsTakenByOpponent + totalSideLengthFromCorners * 50
+	val sideLengthFromCorners = totalSideLengthFromCorners (player, board)
+	val sideLengthFromCornersForOpponent = totalSideLengthFromCorners (nextPlayer player, board)
+	val score = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 10 +
+		    (sideLengthFromCorners - sideLengthFromCornersForOpponent) * 50
     in
 	if numCellsTakenByOpponent = 0 then score + 2000
+	else if numCellsTakenByPlayer = 0 then score - 2000
 	else if numCellsTakenByPlayer + numCellsTakenByOpponent = 64 then
 	    if numCellsTakenByPlayer > numCellsTakenByOpponent then score + 1000
 	    else if numCellsTakenByPlayer < numCellsTakenByOpponent then score - 1000
@@ -454,12 +517,22 @@ fun evaluateBoard (player, board) =
 	    score
     end
 
+
 (* ===================== *)
 (* The Negamax algorithm *)
 (* ===================== *)
 
+(* Used as negative infinity for scores *)
 val minScore = ~10000000
 
+(* negamax depth color (player, board)
+ * TYPE: int -> int -> player * board -> int
+ * PRE: depth >= 0, color in {1, -1} (1 for player, -1 for opponent)
+ * POST: the score * color for the best position for player that the negamax algorithm can find
+ *       using the given search depth starting from board
+ * SIDE EFFECTS:
+ *)
+(* VARIANT: depth *)
 fun negamax depth color (player, board) =
     let
 	fun handleChildren positions =
@@ -477,6 +550,15 @@ fun negamax depth color (player, board) =
 	else handleChildren legalPositions
     end
 
+(* evaluatePositions positions (player, board)
+ * TYPE: int list -> player * board -> (int * int) list
+ * PRE: for each pos in positions, 0 <= pos < 64 and pos represents a legal move for player
+ * POST: a list with (position, score) pairs for each position in positions, showing
+ *       the score that the negamax algorithm gives to the result of placing a piece
+ *       for player at position on the board
+ * SIDE EFFECTS: Exception IllegalMove (player, Move pos) if pos in positions represents an illegal move
+ *               Exception Subscript if any position in positions is out of range
+ *)
 fun evaluatePositions positions (player, board) =
     let
 	val moves = map (fn pos => Move pos) positions
@@ -486,6 +568,16 @@ fun evaluatePositions positions (player, board) =
 	ListPair.zip (positions, scores)
     end
 
+(* findBestPosition positions (player, board)
+ * TYPE: int list -> player * board -> int
+ * PRE: for each pos in positions, 0 <= pos < 64 and pos represents a legal move for player
+ * POST: the position in positions that represents what seems to be the best move for player on the board
+ * SIDE EFFECTS: Exception IllegalMove (player, Move pos) if pos in positions represents an illegal move
+ *               Exception Subscript if any position in positions is out of range
+ * NOTE: This code randomizes the choice between moves with equal score. This is not necessary, but
+ *       makes the result when playing against itself non-deterministic. It may also make it a bit more
+ *       fun for a human player.
+ *)
 fun findBestPosition positions (player, board) =
     let
 	val bestPositionAndScore =
@@ -499,11 +591,20 @@ fun findBestPosition positions (player, board) =
 	#1 bestPositionAndScore
     end
 
+
 (* ================ *)
 (* The brain itself *)
 (* ================ *)
 
-fun think ((player, board), previousMove, timeLeft) =
+(* think ((player, board), previousMove, timeLeft)
+ * TYPE: think T * move * Time.time -> move * T
+ * PRE: previousMove is legal for the opponent given board
+ * POST: (move, (player, board')) where move is the chosen move for player on the board
+ *       that results after making previousMove for the opponent on board
+ * SIDE EFFECTS: IllegalMove (nextPlayer player, previousMove) if previousMove is illegal
+ *               for the opponent on the given board
+ *)
+fun think ((player, board) : T, previousMove, timeLeft : Time.time) =
     let
 	val newBoard = makeMove previousMove (nextPlayer player, board)
 	val legalPositions = findAllLegalPositions (player, newBoard)
@@ -511,27 +612,7 @@ fun think ((player, board), previousMove, timeLeft) =
 	    if null legalPositions then Pass
 	    else (Move (findBestPosition legalPositions (player, newBoard)))
     in
-	(move, (player, makeMove move (player, newBoard)))
+	(move, (player, makeMove move (player, newBoard)) : T)
     end
-
-(* ========================= *)
-(* Functions to print boards *)
-(* ========================= *)
-
-fun playerOptionToString NONE = "."
-  | playerOptionToString (SOME Black) = "x"
-  | playerOptionToString (SOME White) = "o"
-
-fun rowToString row =
-    Vector.foldr (fn ((pos, field), restOfRow) => (if pos < 0 then "" else playerOptionToString field) ^ restOfRow)
-    ""
-    row
-
-fun rowsToString rows =
-    Vector.foldr (fn (row, rows) => if rowToString row = "" then rows else (rowToString row ^ "\n" ^ rows)) "" rows
-
-fun boardToString (player, board) =
-    rowsToString board ^ playerOptionToString (SOME player) ^ " to move"
-
 
 end;
