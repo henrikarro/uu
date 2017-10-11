@@ -44,6 +44,9 @@ type board = cell vector vector
 (* The state of the machine: the player whose turn it is, and the board *)
 type T = player * board
 
+(* Exception signalling that player was not allowed to make move. *)
+exception IllegalMove of player * move
+
 val author = "Henrik Arro"
 
 val nickname = "Hendrix"
@@ -124,9 +127,6 @@ fun nextRandom max =
     in
 	round r mod max
     end
-
-(* Exception signalling that player was not allowed to make move. *)
-exception IllegalMove of player * move
 
 (* opponent player
  * TYPE: player -> player
