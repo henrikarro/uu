@@ -149,7 +149,7 @@ val dummyCell : cell = (~1, NONE);
 (* createRow n
  * TYPE: int -> cell list
  * PRE: true
- * POST: a list of 8 empty cells with positions n .. n+7, surrounded by dummy cells, in total 10 cells,
+ * POST: a list of 8 empty cells with positions n .. n+7, surrounded by dummy cells, in total 10 cells
  *       (positions 28 and 35 are black, and positions 27 and 36 are white)
  * SIDE EFFECTS:
  * EXAMPLES: createRow 8 [(~1, NONE), (8, NONE), (9, NONE), ..., (15, NONE), (~1, NONE)];
