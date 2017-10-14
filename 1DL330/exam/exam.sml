@@ -10,13 +10,16 @@
  * dummy cells around the board, so the dimension of the board is 10x10. The dummy cells contain a
  * position of -1, making it easy to filter them out when looking for neighbors of a cell.
  *
- * The search algorithm used is Negamax (https://en.wikipedia.org/wiki/Negamax). To make the code
- * simpler, alpha beta pruning is not used: without it, it is much easier to use map and fold
- * in the implementation. The time constraint of five minutes is ignored since the search depth is
- * set so low (4 or 6, depending on where in the game we are) that the total think time on the
- * machines svedberg and linne is usually less than a minute. If we wanted to take the remaining
- * time into account, we could for example decrease the search depth when the time starts running
- * out, perhaps going into complete random mode if we get into a real hurry.
+ * The search algorithm used is Negamax with alpha-beta pruning (https://en.wikipedia.org/wiki/Negamax).
+ * Originally, the version without alpha-beta pruning was used. This made the code much cleaner since
+ * we can then use map and fold in the implementation. However, the version with alpha-beta pruning
+ * allows a search depth of 5 (10 at later stages) instead of 4 (6 at later stages), which makes s
+ * small but noticeable difference in performance versus a random player.
+ *
+ * The time constraint of five minutes is ignored since the search depth is set so low that the total
+ * think time on the machines svedberg and linne is usually less than a minute. If we wanted to take
+ * the remaining time into account, we could for example decrease the search depth when the time starts
+ * running out, perhaps going into complete random mode if we get into a real hurry.
  *
  * The evaluation function is based on the importance of holding the corner positions and lines along
  * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
@@ -36,7 +39,7 @@ struct
 type field = player option
 
 (* A cell contains the position (0 .. 63 or -1) of a field, and the field itself *)
-type cell = (int * field)
+type cell = int * field
 
 (* A board is a vector of row vectors containing cells *)
 type board = cell vector vector
@@ -549,17 +552,49 @@ fun evaluateBoard (player, board) =
 (* Used as negative infinity for scores *)
 val minScore = ~10000000
 
-(* negamax depth (player, board)
- * TYPE: int -> player * board -> int
+(* Use as positive infintiy for scores *)
+val maxScore = 10000000
+
+(* negamax depth (player, board) alpha beta
+ * TYPE: int -> player * board -> int -> int -> int
  * PRE: depth >= 0
  * POST: the score for the best position for player that the negamax algorithm can find
- *       using the given search depth starting from board
+ *       using the given search depth starting from board using alpha and beta as lower
+ *       and upper bounds, respectively, for the score
  * SIDE EFFECTS:
  * NOTE: We do not have to use the color parameter described in the pseudocode at
  *       https://en.wikipedia.org/wiki/Negamax since evaluateBoard does the evaluation
  *       from the point of view of the current player.
  *)
 (* VARIANT: depth *)
+fun negamax depth (player, board) alpha beta =
+    let
+	fun handleChildren [] bestScore alpha beta = bestScore
+	  | handleChildren (board::boards) bestScore alpha beta =
+	    let
+		val score = ~(negamax (depth - 1) (opponent player, board) (~beta) (~alpha))
+		val newBestScore = Int.max (score, bestScore)
+		val newAlpha = Int.max (alpha, score)
+	    in
+		if newAlpha >= beta then newBestScore
+		else handleChildren boards newBestScore newAlpha beta
+	    end
+    in
+	if depth = 0 orelse isFinalPosition board
+	then evaluateBoard (player, board)
+	else
+	    let
+		val positions = findAllLegalPositions (player, board)
+		val moves = if (null positions) then [Pass] else map (fn pos => Move pos) positions
+		val boards = map (fn move => makeMove move (player, board)) moves
+	    in
+		handleChildren boards minScore alpha beta
+	    end
+    end
+
+(* This is the version without alpha-beta pruning. The code is a lot cleaner, but limits
+ * the search depth to 4/6 instead of 5/10. *)
+(*
 fun negamax depth (player, board) =
     let
 	fun handleChildren positions =
@@ -570,13 +605,12 @@ fun negamax depth (player, board) =
 	    in
 		foldl Int.max minScore scores
 	    end
-
-	val legalPositions = findAllLegalPositions (player, board)
     in
 	if depth = 0 orelse isFinalPosition board
 	then evaluateBoard (player, board)
-	else handleChildren legalPositions
+	else handleChildren (findAllLegalPositions (player, board))
     end
+*)
 
 (* searchDepth board
  * TYPE: board -> int
@@ -584,7 +618,7 @@ fun negamax depth (player, board) =
  * POST: the negamax search depth to use for the given board
  * SIDE EFFECTCS:
  *)
-fun searchDepth board = if numTakenFields board > 51 then 6 else 4;
+fun searchDepth board = if numTakenFields board > 51 then 10 else 5
 
 (* evaluatePositions positions (player, board)
  * TYPE: int list -> player * board -> (int * int) list
@@ -599,7 +633,7 @@ fun evaluatePositions positions (player, board) =
     let
 	val moves = map (fn pos => Move pos) positions
 	val boards = map (fn move => makeMove move (player, board)) moves
-	val scores = map (fn board => ~(negamax (searchDepth board) (opponent player, board))) boards
+	val scores = map (fn board => ~(negamax (searchDepth board) (opponent player, board) minScore maxScore)) boards
     in
 	ListPair.zip (positions, scores)
     end
