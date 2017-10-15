@@ -552,7 +552,7 @@ fun evaluateBoard (player, board) =
 (* Used as negative infinity for scores *)
 val minScore = ~10000000
 
-(* Use as positive infintiy for scores *)
+(* Used as positive infintiy for scores *)
 val maxScore = 10000000
 
 (* negamax depth (player, board) alpha beta
