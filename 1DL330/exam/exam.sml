@@ -13,7 +13,7 @@
  * The search algorithm used is Negamax with alpha-beta pruning (https://en.wikipedia.org/wiki/Negamax).
  * Originally, the version without alpha-beta pruning was used. This made the code much cleaner since
  * we can then use map and fold in the implementation. However, the version with alpha-beta pruning
- * allows a search depth of 5 (10 at later stages) instead of 4 (6 at later stages), which makes s
+ * allows a search depth of 5 (12 at later stages) instead of 4 (6 at later stages), which makes s
  * small but noticeable difference in performance versus a random player.
  *
  * The time constraint of five minutes is ignored since the search depth is set so low that the total
@@ -593,7 +593,7 @@ fun negamax depth (player, board) alpha beta =
     end
 
 (* This is the version without alpha-beta pruning. The code is a lot cleaner, but limits
- * the search depth to 4/6 instead of 5/10. *)
+ * the search depth to 4/6 instead of 5/12. *)
 (*
 fun negamax depth (player, board) =
     let
@@ -618,7 +618,7 @@ fun negamax depth (player, board) =
  * POST: the negamax search depth to use for the given board
  * SIDE EFFECTCS:
  *)
-fun searchDepth board = if numTakenFields board > 51 then 10 else 5
+fun searchDepth board = if numTakenFields board > 51 then 12 else 5
 
 (* evaluatePositions positions (player, board)
  * TYPE: int list -> player * board -> (int * int) list
