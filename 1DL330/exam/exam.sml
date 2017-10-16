@@ -197,16 +197,16 @@ fun init p : T = (p, emptyBoard)
 (* Lookup and update functions for boards *)
 (* ====================================== *)
 
-(* lookupByRowAndColumn row col board
+(* lookup row col board
  * TYPE: int -> int -> board -> cell
  * PRE: 0 <= row < 10 and 0 <= col < 10
  * POST: the cell at the given row and column of board
  * SIDE EFFECTS: Exception Subscript if row or column are out of range
- * EXAMPLES: lookupByRowAndColumn 2 3 emptyBoard = (10, NONE);
+ * EXAMPLES: lookup 2 3 emptyBoard = (10, NONE);
  * NOTE: the coordinates of the "normal" board, i.e., without the border of dummy cells,
  *       are 1-based, with row and col in the range 1 .. 8.
  *)
-fun lookupByRowAndColumn row col (board : board) =
+fun lookup row col (board : board) =
     let
 	val row = Vector.sub (board, row)
     in
@@ -230,15 +230,6 @@ fun rowNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos div 8 
  * EXAMPLES: colNum 0 = 1; colNum 15 = 8; colNum 63 = 8;
  *)
 fun colNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos mod 8 + 1;
-
-(* lookup pos board
- * TYPE: int -> board -> cell
- * PRE: 0 <= pos < 64
- * POST: the cell at position pos of board
- * SIDE EFFECTS: Exception Subscript if pos is out of range
- * EXAMPLES: lookup 10 emptyBoard = (10, NONE);
- *)
-fun lookup pos board = lookupByRowAndColumn (rowNum pos) (colNum pos) board;
 
 (* updateBoard pos (player, board)
  * TYPE: int -> player * board -> board
@@ -299,12 +290,12 @@ fun positionsToTurn pos (player, board) =
 	 *          b) a dummy (border) cell, or c) a cell owned by player. In other
 	 *          cases, a Subscript exception is raised. The only way this function
 	 *          will fail to terminate is if f is the identity function or otherwise
-	 *          keeps the row and column to a small number of position. *)
+	 *          keeps the row and column to a small number of positions. *)
 	fun searchOneDirection row col (player, board) updatePosition =
 	    let
 		fun search (newRow, newColumn) positionsToTurn =
 		    let
-			val (pos, field) = lookupByRowAndColumn newRow newColumn board
+			val (pos, field) = lookup newRow newColumn board
 		    in
 			if field = NONE orelse pos < 0 then []
 			else if field = (SOME player) then positionsToTurn
@@ -496,7 +487,7 @@ fun totalSideLengthFromCorners (player, board) =
 	    let
 		fun lineLength (newRow, newColumn) positionsTaken =
 		    let
-			val (pos, field) = lookupByRowAndColumn newRow newColumn board
+			val (pos, field) = lookup newRow newColumn board
 		    in
 			if field = (SOME player)
 			then lineLength (updatePosition (newRow, newColumn)) (pos :: positionsTaken)
@@ -521,7 +512,7 @@ fun totalSideLengthFromCorners (player, board) =
  * PRE: true
  * POST: an estimate of the strength of the position for player on the board, the larger the number
  *       the better for player. A negative number means the opponent has a stronger positions, zero
- *       means an equal strength.
+ *       means equal strength.
  * SIDE EFFECTS:
  * EXAMPLES: evaluateBoard (Black, emptyBoard) = 0; evaluateBoard (White, emptyBoard) = 0;
  *)
