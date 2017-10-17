@@ -522,17 +522,23 @@ fun evaluateBoard (player, board) =
 	val numCellsTakenByOpponent = length (findAllCellsTakenByPlayer (opponent player, board))
 	val sideLengthFromCorners = totalSideLengthFromCorners (player, board)
 	val sideLengthFromCornersForOpponent = totalSideLengthFromCorners (opponent player, board)
-	val scoreFromCells = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 10
+	val numMovesForPlayer = length (findAllLegalPositions (player, board))
+	val numMovesForOpponent = length (findAllLegalPositions (opponent player, board))
+	val scoreFromCells = (numCellsTakenByPlayer - numCellsTakenByOpponent) * 20
 	val scoreFromLines = (sideLengthFromCorners - sideLengthFromCornersForOpponent) * 50
+	val scoreFromMoves = (numMovesForPlayer - numMovesForOpponent) * 1
     in
+	(* If a player is wiped out it is either very good or very bad. *)
 	if numCellsTakenByOpponent = 0 then 10000
 	else if numCellsTakenByPlayer = 0 then ~10000
 	else if isFinalPosition board then
+	    (* In the endgame, we only care about the number of cells. *)
 	    if numCellsTakenByPlayer > numCellsTakenByOpponent then scoreFromCells + 2000
 	    else if numCellsTakenByPlayer < numCellsTakenByOpponent then scoreFromCells - 2000
 	    else 0
 	else
-	    scoreFromCells + scoreFromLines
+	    (* In normal play, we want lines from corners and manay available moves (mobility). *)
+	    scoreFromLines + scoreFromMoves
     end
 
 
