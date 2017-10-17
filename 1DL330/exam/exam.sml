@@ -16,20 +16,22 @@
  * allows a search depth of 5 (12 at later stages) instead of 4 (6 at later stages), which makes s
  * small but noticeable difference in performance versus a random player.
  *
- * The time constraint of five minutes is ignored since the search depth is set so low that the total
- * think time on the machines svedberg and linne is usually less than a minute. If we wanted to take
- * the remaining time into account, we could for example decrease the search depth when the time starts
- * running out, perhaps going into complete random mode if we get into a real hurry.
+ * The time constraint of five minutes is handled in the searchDepth function by reducing the search
+ * depth when we start running out of time. Please note that reducing the search depth at the end of
+ * a game is exactly the opposite of what we want to do, so it is still very important to find a
+ * default search depth that works without running out of time on the machines that this code will
+ * run on.
  *
- * The evaluation function is based on the importance of holding the corner positions and lines along
- * the edges starting from a corner. A win is heavily rewarded, especially if it means wiping out the
- * opponent. Least importantly, the number of positions held by the players is also compared.
+ * The evaluation function during normal play is based on the importance of holding the corner
+ * positions and lines along the edges starting from a corner, and the importance of having many
+ * available moves. During the endgame, only the number of discs matters. A win that wipes out the
+ * opponent is heavily rewarded.
  *
- * I have occasionally added type annotations to values. This is just to make the compiler use
- * the type aliases (e.g., field, cell or board) instead of their basic types. It is not necessary,
- * but makes the signature that PolyML presents look a lot cleaner. I have only used the type T in
- * functions that are specified in the assignment description, in all other cases I use the type
- * player * board instead since I think this makes the code easier to understand.
+ * In the code, I have occasionally added type annotations to values. This is just to make the
+ * compiler use the type aliases (e.g., field, cell or board) instead of their basic types. It is
+ * not necessary, but makes the signature that PolyML presents look a lot cleaner. I have only used
+ * the type T in functions that are specified in the assignment description, in all other cases I
+ * use the type player * board instead since I think this makes the code easier to understand.
  *)
 
 structure Reversi_AI =
@@ -47,7 +49,7 @@ type board = cell vector vector
 (* The state of the machine: the player whose turn it is, and the board *)
 type T = player * board
 
-(* Exception signalling that player was not allowed to make move. *)
+(* Exception signalling that player was not allowed to make move *)
 exception IllegalMove of player * move
 
 val author = "Henrik Arro"
@@ -609,43 +611,53 @@ fun negamax depth (player, board) =
     end
 *)
 
-(* searchDepth board
- * TYPE: board -> int
+(* searchDepth board timeLeft
+ * TYPE: board -> Time.time -> int
  * PRE: true
- * POST: the negamax search depth to use for the given board
+ * POST: the negamax search depth to use for the given board and the given time left
  * SIDE EFFECTCS:
  *)
-fun searchDepth board = if numTakenFields board > 51 then 12 else 5
+fun searchDepth board timeLeft =
+    let
+	val secondsLeft = Time.toSeconds timeLeft
+	val depth = if numTakenFields board > 51 then 12 else 5
+    in
+	if secondsLeft < 120 then depth - 1
+	else if secondsLeft < 30 then 1
+	else depth
+    end
 
-(* evaluatePositions positions (player, board)
- * TYPE: int list -> player * board -> (int * int) list
+(* evaluatePositions positions (player, board) timeLeft
+ * TYPE: int list -> player * board -> Time.time -> (int * int) list
  * PRE: for each pos in positions, 0 <= pos < 64 and pos represents a legal move for player
  * POST: a list with (position, score) pairs for each position in positions, showing
  *       the score that the negamax algorithm gives to the result of placing a piece
- *       for player at position on the board
+ *       for player at position on the board when player has the given time left
  * SIDE EFFECTS: Exception IllegalMove (player, Move pos) if pos in positions represents an illegal move
  *               Exception Subscript if any position in positions is out of range
  *)
-fun evaluatePositions positions (player, board) =
+fun evaluatePositions positions (player, board) timeLeft =
     let
 	val moves = map (fn pos => Move pos) positions
 	val boards = map (fn move => makeMove move (player, board)) moves
-	val scores = map (fn board => ~(negamax (searchDepth board) (opponent player, board) minScore maxScore)) boards
+	val depth = searchDepth board timeLeft
+	val scores = map (fn board => ~(negamax depth (opponent player, board) minScore maxScore)) boards
     in
 	ListPair.zip (positions, scores)
     end
 
-(* findBestPosition positions (player, board)
- * TYPE: int list -> player * board -> int
+(* findBestPosition positions (player, board) timeLeft
+ * TYPE: int list -> player * board -> Time.time -> int
  * PRE: for each pos in positions, 0 <= pos < 64 and pos represents a legal move for player
  * POST: the position in positions that represents what seems to be the best move for player on the board
+ *       when player has the given time left
  * SIDE EFFECTS: Exception IllegalMove (player, Move pos) if pos in positions represents an illegal move
  *               Exception Subscript if any position in positions is out of range
  * NOTE: This code randomizes the choice between moves with equal score. This is not necessary, but
  *       makes the result when playing against itself non-deterministic. It may also make it a bit more
  *       fun for a human player.
  *)
-fun findBestPosition positions (player, board) =
+fun findBestPosition positions (player, board) timeLeft =
     let
 	val bestPositionAndScore =
 	    foldl (fn ((pos1, score1), (pos2, score2)) =>
@@ -653,7 +665,7 @@ fun findBestPosition positions (player, board) =
 		      else if score1 = score2 then if (nextRandom 2) = 0 then (pos1, score1) else (pos2, score2)
 		      else (pos2, score2))
 		  (~1, minScore)
-		  (evaluatePositions positions (player, board));
+		  (evaluatePositions positions (player, board) timeLeft);
     in
 	 #1 bestPositionAndScore
     end
@@ -667,17 +679,18 @@ fun findBestPosition positions (player, board) =
  * TYPE: T * move * Time.time -> move * T
  * PRE: previousMove is legal for the opponent given board
  * POST: (move, (player, board')) where move is the chosen move for player on the board
- *       that results after making previousMove for the opponent on board
+ *       that results after making previousMove for the opponent on board when player
+ *       has the given time left
  * SIDE EFFECTS: IllegalMove (opponent player, previousMove) if previousMove is illegal
  *               for the opponent on the given board
  *)
-fun think ((player, board) : T, previousMove, timeLeft : Time.time) =
+fun think ((player, board) : T, previousMove, timeLeft) =
     let
 	val newBoard = makeMove previousMove (opponent player, board)
 	val legalPositions = findAllLegalPositions (player, newBoard)
 	val move =
 	    if null legalPositions then Pass
-	    else (Move (findBestPosition legalPositions (player, newBoard)))
+	    else (Move (findBestPosition legalPositions (player, newBoard) timeLeft))
     in
 	(move, (player, makeMove move (player, newBoard)) : T)
     end
