@@ -623,7 +623,7 @@ fun searchDepth board timeLeft =
 	val depth = if numTakenFields board > 51 then 12 else 5
     in
 	if secondsLeft < 120 then depth - 1
-	else if secondsLeft < 30 then 1
+	else if secondsLeft < 30 then 3
 	else depth
     end
 
