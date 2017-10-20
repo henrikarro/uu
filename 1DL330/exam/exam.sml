@@ -238,7 +238,7 @@ fun colNum pos = if pos < 0 orelse pos > 63 then raise Subscript else pos mod 8 
  * PRE: 0 <= pos < 64
  * POST: a board where the cell with position pos is owned by player
  * SIDE EFFECTS: Exception Subscript if pos is out of range
- * EXAMPLES: lookup 42 (updateBoard 42 (Black, emptyBoard)) = (42, SOME Black);
+ * EXAMPLES: lookup 6 3 (updateBoard 42 (Black, emptyBoard)) = (42, SOME Black);
  *)
 fun updateBoard pos (player, board : board) : board =
     let
