@@ -1,7 +1,7 @@
 .PHONY: all compile compile_tests beamdir dialyzer eunit proper doc clean distclean
 .SUFFIXES: .erl .beam
 
-APPNAME=Powerset
+APPNAME=powerset
 
 ERLCFLAGS=-Werror +debug_info
 
@@ -36,7 +36,7 @@ eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
 
 proper: compile_tests
-	erl -noshell -pa $(BEAMDIR) -eval "proper:module(powerset_proper)" -s init stop
+	erl -noshell -pa $(BEAMDIR) -eval "proper:module($(APPNAME)_proper)" -s init stop
 
 doc:
 	mkdir -p $(DOCDIR)
