@@ -2,6 +2,10 @@
 
 -include_lib("proper/include/proper.hrl").
 
+%%%
+%%% PropEr Properties
+%%%
+
 prop_depth_is_correct() ->
     ?FORALL(D, depth(), tree_depth(dfs:complete_binary_tree(D)) =:= D).
 
