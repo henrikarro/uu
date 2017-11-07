@@ -4,6 +4,7 @@
 APPNAME=powerset
 
 ERLCFLAGS=-Werror +debug_info
+DIALYZERFLAGS=-n -Wunderspecs -Wunmatched_returns
 
 SRCDIR=./src
 TESTDIR=./test
@@ -30,7 +31,7 @@ $(BEAMDIR):
 	mkdir -p $(BEAMDIR)
 
 dialyzer: compile
-	dialyzer -Wunmatched_returns $(BEAMDIR)/*.beam
+	dialyzer $(DIALYZERFLAGS) $(BEAMDIR)/*.beam
 
 eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
