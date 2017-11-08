@@ -43,9 +43,9 @@ doc:
 	mkdir -p $(DOCDIR)
 	erl -noshell -eval "edoc:application($(APPNAME), \".\", [$(DOC_OPTS)])" -s init stop
 
-#clean:
-	rm -rf $(BEAMDIR)/*.beam
+clean:
+	rm -rf $(BEAMDIR)
 	rm -rf erl_crash.dump
 
-#distclean: clean
-#	rm -rf $(DOCDIR)
+distclean: clean
+	rm -rf $(DOCDIR)
