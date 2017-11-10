@@ -1,9 +1,10 @@
 .PHONY: all compile compile_tests beamdir dialyzer eunit proper doc clean distclean
 .SUFFIXES: .erl .beam
 
-APPNAME=vector_server
+APPNAME=road
 
 ERLCFLAGS=-Werror +debug_info
+#ERLCFLAGS=+debug_info
 DIALYZERFLAGS=-n -Wunderspecs -Wunmatched_returns
 
 SRCDIR=.
@@ -18,7 +19,7 @@ TESTOBJECTS=$(TESTSOURCES:$(TESTDIR)/%.erl=$(BEAMDIR)/%.beam)
 
 #VPATH=$(SRCDIR):$(TESTDIR)
 
-all: eunit proper
+all: dialyzer eunit proper
 
 $(BEAMDIR)/%.beam: %.erl
 	erlc $(ERLCFLAGS) -o $(BEAMDIR) $<
@@ -37,7 +38,7 @@ eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
 
 proper: compile_tests
-	erl -noshell -pa $(BEAMDIR) -eval "proper:module($(APPNAME)_proper)" -s init stop
+	erl -noshell -pa $(BEAMDIR) -eval "proper:module($(APPNAME), [{numtests, 10000}])" -s init stop
 
 doc:
 	mkdir -p $(DOCDIR)
