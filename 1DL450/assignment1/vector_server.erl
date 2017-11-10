@@ -30,6 +30,9 @@
 
 -behaviour(gen_server).
 
+-include_lib("proper/include/proper.hrl").
+-include_lib("eunit/include/eunit.hrl").
+
 %% API
 -export([start_link/1, start_link/0, stop/0]).
 
@@ -87,8 +90,7 @@ handle_cast(stop, State) ->
     {stop, normal, State}.
 
 handle_info({tcp, Socket, RawData}, State) ->
-    io:format("Incoming: ~s", [RawData]),
-    try
+    ok = try
         ResultTerm = handle_input(RawData),
         gen_tcp:send(Socket, io_lib:fwrite("Res: ~w~n", [ResultTerm]))
     catch
@@ -97,7 +99,6 @@ handle_info({tcp, Socket, RawData}, State) ->
     end,
     {noreply, State};
 handle_info({tcp_closed, _Socket}, State) ->
-    io:format("Socket closed~n"),
     gen_server:cast(self(), accept),
     {noreply, State}.
 
@@ -113,7 +114,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 handle_input(String) ->
     Term = convert_string_to_term(String),
-    eval(Term).
+    eval_expr(Term).
 
 convert_string_to_term(RawData) ->
     String = lists:flatten(io_lib:format("~s.", [RawData])),
@@ -131,18 +132,18 @@ convert_string_to_term(RawData) ->
             throw({syntax_error, ErrorMessage})
     end.
 
-eval(E) when is_list(E) -> eval_vector(E);
-eval({Op, E1, E2}) when Op =:= add orelse Op =:= sub orelse Op =:= dot ->
-    T1 = eval(E1),
-    T2 = eval(E2),
+eval_expr(E) when is_list(E) -> eval_vector(E);
+eval_expr({Op, E1, E2}) when Op =:= add orelse Op =:= sub orelse Op =:= dot ->
+    T1 = eval_expr(E1),
+    T2 = eval_expr(E2),
     case Op of
         add -> vector_op(fun(X, Y) -> X + Y end, T1, T2);
         sub -> vector_op(fun(X, Y) -> X - Y end, T1, T2);
         dot -> vector_op(fun(X, Y) -> X * Y end, T1, T2)
     end;
-eval({Op, E1, E2}) when Op =:= mul orelse Op =:= 'div' ->
+eval_expr({Op, E1, E2}) when Op =:= mul orelse Op =:= 'div' ->
     T1 = eval_int_expr(E1),
-    T2 = eval(E2),
+    T2 = eval_expr(E2),
     try
         case Op of
             mul -> lists:map(fun(X) -> X * T1 end, T2);
@@ -152,7 +153,7 @@ eval({Op, E1, E2}) when Op =:= mul orelse Op =:= 'div' ->
         error:Term ->
             throw({runtime_error, io_lib:format("Error: ~w", [Term])})
     end;
-eval(Expr) -> throw({syntax_error, io_lib:format("Illegal expression: ~w", [Expr])}).
+eval_expr(Expr) -> throw({syntax_error, io_lib:format("Illegal expression: ~w", [Expr])}).
 
 eval_vector([]) -> throw({syntax_error, "Empty vectors are not allowed"});
 eval_vector([X]) when is_integer(X) -> [X];
@@ -165,10 +166,10 @@ eval_vector(_) ->
 
 eval_int_expr(N) when is_integer(N) -> N;
 eval_int_expr({norm_one, E}) ->
-    T = eval(E),
+    T = eval_expr(E),
     lists:foldl(fun(X, Y) -> abs(X) + Y end, 0, T);
 eval_int_expr({norm_inf, E}) ->
-    T = eval(E),
+    T = eval_expr(E),
     lists:foldl(fun(X, Y) -> max(abs(X), Y) end, 0, T);
 eval_int_expr(Expr) ->
     throw({syntax_error, io_lib:format("Illegal integer expression: ~w", [Expr])}).
@@ -184,8 +185,6 @@ vector_op(F, L1, L2) ->
 %% EUnit Test Cases
 %%--------------------------------------------------------------------
 
--include_lib("eunit/include/eunit.hrl").
-
 convert_string_to_term_test_() ->
     [?_assertEqual(foo, convert_string_to_term("foo")),
      ?_assertEqual([1,2,3], convert_string_to_term("[1, 2, 3]")),
@@ -198,3 +197,10 @@ convert_string_to_term_test_() ->
 vector_op_test_() ->
     [?_assertEqual([3,5,7], vector_op(fun(X,Y)->X+Y end, [1,2,3], [2,3,4]))
     ].
+
+%%--------------------------------------------------------------------
+%% Property-Based Test Cases
+%%--------------------------------------------------------------------
+
+prop_true() ->
+    ?FORALL(N, non_neg_integer(), N >= 0).
