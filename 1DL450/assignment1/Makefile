@@ -1,11 +1,13 @@
 .PHONY: all compile compile_tests beamdir dialyzer eunit proper doc clean distclean
 .SUFFIXES: .erl .beam
 
-APPNAME=road
+APPNAME=afp_assignment_1
+
+ZIPFILE=afp_assignment.zip
 
 ERLCFLAGS=-Werror +debug_info
-#ERLCFLAGS=+debug_info
 DIALYZERFLAGS=-n -Wunderspecs -Wunmatched_returns
+EDOCOPTS={private, true}
 
 SRCDIR=.
 TESTDIR=./
@@ -38,15 +40,18 @@ eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
 
 proper: compile_tests
-	erl -noshell -pa $(BEAMDIR) -eval "proper:module($(APPNAME), [{numtests, 10000}])" -s init stop
+	erl -noshell -pa $(BEAMDIR) -eval "proper:module(road, [{numtests, 10000}])" -s init stop
 
 doc:
 	mkdir -p $(DOCDIR)
-	erl -noshell -eval "edoc:application($(APPNAME), \".\", [$(DOC_OPTS)])" -s init stop
+	erl -noshell -eval "edoc:application($(APPNAME), \".\", [$(EDOCOPTS)])" -s init stop
 
+dist: distclean
+	zip $(ZIPFILE) *
 clean:
 	rm -rf $(BEAMDIR)
 	rm -rf erl_crash.dump
+	rm -rf $(ZIPFILE)
 
 distclean: clean
 	rm -rf $(DOCDIR)
