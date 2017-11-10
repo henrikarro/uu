@@ -6,7 +6,7 @@
 -type empty_tree(_T) :: {}.
 -type non_empty_tree(T) :: {T, tree(T), tree(T)}.
 
--spec complete_binary_tree(pos_integer()) -> non_empty_tree(pos_integer()).
+%-spec complete_binary_tree(pos_integer()) -> non_empty_tree(pos_integer()).
 complete_binary_tree(Depth) -> complete_binary_tree(Depth, 1, 1).
 
 %-spec complete_binary_tree(pos_integer(), pos_integer(), L) -> non_empty_tree(L) when L :: pos_integer().
