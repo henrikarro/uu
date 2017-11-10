@@ -50,6 +50,7 @@ dist: distclean
 	zip $(ZIPFILE) *
 clean:
 	rm -rf $(BEAMDIR)
+	rm -f *.beam
 	rm -rf erl_crash.dump
 	rm -rf $(ZIPFILE)
 
