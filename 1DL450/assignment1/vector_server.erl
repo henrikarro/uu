@@ -95,6 +95,8 @@ handle_info({tcp, Socket, RawData}, State) ->
         gen_tcp:send(Socket, io_lib:fwrite("Res: ~w~n", [ResultTerm]))
     catch
         {syntax_error, _ErrorMessage} ->
+            gen_tcp:send(Socket, io_lib:fwrite("Res: ~s~n", ["error"]));
+	{runtime_error, _ErrorMessage} ->
             gen_tcp:send(Socket, io_lib:fwrite("Res: ~s~n", ["error"]))
     end,
     {noreply, State};
