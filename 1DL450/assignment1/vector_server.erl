@@ -30,7 +30,6 @@
 
 -behaviour(gen_server).
 
--include_lib("proper/include/proper.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
@@ -40,12 +39,23 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
+-export([eval_expr/1]).
+
 -define(SERVER, ?MODULE).
 -define(DEFAULT_PORT, 1055).
 
 % The state of the server
 -record(state, {port :: char(), lsock :: port()}).
 -type state() :: #state{}.
+
+-type expr() :: vector() | {vector_op(), expr(), expr()} | {scalar_op(), int_expr(), expr()}.
+-type vector() :: [integer(), ...].
+-type vector_op() :: 'add' | 'sub' | 'dot'.
+-type scalar_op() :: 'mul' | 'div'.
+-type int_expr() :: integer() | {norm(), expr()}.
+-type norm() :: 'norm_one' | 'norm_inf'.
+
+-export_type([expr/0, vector/0, vector_op/0, scalar_op/0, int_expr/0, norm/0]).
 
 %%%===================================================================
 %%% API
@@ -124,13 +134,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Private functions
 %%%===================================================================
 
--type expr() :: vector() | {vector_op(), expr(), expr()} | {scalar_op(), int_expr(), expr()}.
--type vector() :: [integer(), ...].
--type vector_op() :: 'add' | 'sub' | 'dot'.
--type scalar_op() :: 'mul' | 'div'.
--type int_expr() :: integer() | {norm(), expr()}.
--type norm() :: 'norm_one' | 'norm_inf'.
-
 -spec handle_input(iolist()) -> vector().
 handle_input(String) ->
     Term = convert_string_to_term(String),
@@ -155,7 +158,6 @@ convert_string_to_term(RawData) ->
 
 -spec eval_expr(expr()) -> vector().
 eval_expr(E) -> eval_expr(E, 0).
-
 % If the following spec is not commented out, Dialyzer gives a strange warning
 %-spec eval_expr(expr(), non_neg_integer()) -> vector().
 eval_expr(_E, Depth) when Depth > 101 -> throw({eval_error, "Expression too deeply nested"});
@@ -169,7 +171,7 @@ eval_expr({Op, E1, E2}, Depth) when Op =:= add orelse Op =:= sub orelse Op =:= d
         dot -> vector_op(fun(X, Y) -> X * Y end, T1, T2)
     end;
 eval_expr({Op, E1, E2}, Depth) when Op =:= mul orelse Op =:= 'div' ->
-    T1 = eval_int_expr(E1, Depth),
+    T1 = eval_int_expr(E1, Depth + 1),
     T2 = eval_expr(E2, Depth + 1),
     try
         case Op of
@@ -239,19 +241,24 @@ eval_expr_test_cases_from_assignment_description_test_() ->
 eval_expr_test_() ->
     [
      ?_assertEqual([5,7,9], eval_expr({add, [1,2,3], [4,5,6]})),
+     ?_assertEqual([10 * 2 + 3], eval_expr(create_nested_expr(10, add, [1], [2]))),
      ?_assertEqual([1,2,3], eval_expr({sub, [5,7,9],[4,5,6]})),
+     ?_assertEqual([10 * -2 - 1], eval_expr(create_nested_expr(10, sub, [1], [2]))),
      ?_assertEqual([4,10,18], eval_expr({dot, [1,2,3], [4,5,6]})),
+     ?_assertEqual([round(math:pow(2, 10 + 1))], eval_expr(create_nested_expr(10, dot, [1], [2]))),
      ?_assertEqual([8,10,12], eval_expr({mul, 2, [4,5,6]})),
      ?_assertEqual([24,30,36], eval_expr({mul, {norm_one, [-1,-3,2]}, [4,5,6]})),
+     ?_assertEqual([92,115,138], eval_expr({mul, {norm_one, create_nested_expr(10, add, [1], [2])}, [4,5,6]})),
      ?_assertEqual([12,15,18], eval_expr({mul, {norm_inf, [-1,-3,2]}, [4,5,6]})),
+     ?_assertEqual([92,115,138], eval_expr({mul, {norm_inf, create_nested_expr(10, add, [1], [2])}, [4,5,6]})),
      ?_assertEqual([2,2,3], eval_expr({'div', 2, [4,5,6]})),
      ?_assertEqual([0,0,1], eval_expr({'div', {norm_one, [-1,-3,2]}, [4,5,6]})),
      ?_assertEqual([1,1,2], eval_expr({'div', {norm_inf, [-1,-3,2]}, [4,5,6]})),
      % Check that vectors of length 100 are OK
      ?_assertEqual([2*X || X <- lists:seq(1,100)], eval_expr({add, lists:seq(1,100), lists:seq(1,100)})),
-     % Check that nested expressions less than 100 deep are OK
+     % Check that nested expressions 100 deep are OK
      ?_assertEqual([100 * 2 + 3], eval_expr(create_nested_expr(100, add, [1], [2]))),
-     ?_assertEqual([99 * 2 + 3], eval_expr({mul, {norm_inf, create_nested_expr(99, add, [1], [2])}, [1]}))
+     ?_assertEqual([98 * 2 + 3], eval_expr({mul, {norm_inf, create_nested_expr(98, add, [1], [2])}, [1]}))
     ].
 
 eval_expr_error_test_() ->
@@ -260,7 +267,7 @@ eval_expr_error_test_() ->
      fun() -> assert_eval_expr_error({add, [], []}, eval_error, "Empty vectors are not allowed") end,
      fun() -> assert_eval_expr_error({add, lists:seq(1,101), lists:seq(1,101)}, eval_error, "Length of vectors must be <= 100") end,
      fun() -> assert_eval_expr_error(create_nested_expr(101, add, [1], [2]), eval_error, "Expression too deeply nested") end,
-     fun() -> assert_eval_expr_error({mul, {norm_inf, create_nested_expr(100, add, [1], [2])}, [1]}, eval_error, "Expression too deeply nested") end,
+     fun() -> assert_eval_expr_error({mul, {norm_inf, create_nested_expr(99, add, [1], [2])}, [1]}, eval_error, "Expression too deeply nested") end,
      fun() -> assert_eval_expr_error({add, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end,
      fun() -> assert_eval_expr_error({sub, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end,
      fun() -> assert_eval_expr_error({dot, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end
@@ -280,10 +287,3 @@ assert_eval_expr_error(Expr, Error, ExpectedErrorMessage) ->
 
 create_nested_expr(0, Op, T1, T2) -> {Op, T1, T2};
 create_nested_expr(N, Op, T1, T2) -> {Op, create_nested_expr(N-1, Op, T1, T2), T2}.
-
-%%--------------------------------------------------------------------
-%% Property-Based Test Cases
-%%--------------------------------------------------------------------
-
-prop_true() ->
-    ?FORALL(N, non_neg_integer(), N >= 0).
