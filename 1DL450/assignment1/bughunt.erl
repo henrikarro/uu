@@ -13,7 +13,9 @@
 -type eval_result() :: vector() | error.
 -type evaluator() :: fun((expr()) -> eval_result()).
 
--type test_result() :: correct | {expr(), eval_result(), eval_result(), string()}.
+-type test_result() :: correct | failed_test_result().
+-type failed_test_result() :: {expr(), eval_result(), eval_result(), string()}.
+
 -type property_info() :: {proper:outer_test(), pos_integer(), string()}.
 
 %% @doc
@@ -42,6 +44,7 @@ test_with_properties(Evaluator, [{Property, NumTests, Comment}|Properties]) ->
             test_result(Evaluator, Comment)
     end.
 
+-spec test_result(evaluator(), string()) -> failed_test_result().
 test_result(Evaluator, Message) ->
             FailedExpr = hd(proper:counterexample()),
             {FailedExpr, eval_expr(FailedExpr), Evaluator(FailedExpr), Message}.
@@ -54,7 +57,7 @@ prop_sub_mul(Evaluator) ->
     ?FORALL(Expr, {sub,[0],{mul,0,[0]}}, eval_expr(Expr) =:= Evaluator(Expr)).
 
 prop_mul_norm_inf(Evaluator) ->
-    ?FORALL(Expr, {mul,{norm_inf,[0]},[8,1]}, eval_expr(Expr) =:= Evaluator(Expr)).
+    ?FORALL(Expr, {mul, {norm_inf,[0]},[1]}, eval_expr(Expr) =:= Evaluator(Expr)).
 
 prop_with_type_as_generator(Evaluator) ->
     ?FORALL(Expr, vector_server:expr(), eval_expr(Expr) =:= Evaluator(Expr)).
@@ -69,6 +72,7 @@ prop_deep_int_expr(Evaluator) ->
     ?FORALL(Expr, {mul, my_deep_int_expr(), my_vector()}, eval_expr(Expr) =:= Evaluator(Expr)).
 
 %% Translates exception error handling to the error handling used in the vectors module.
+-spec eval_expr(expr()) -> eval_result().
 eval_expr(Expr) ->
     try
         vector_server:eval_expr(Expr)
@@ -128,7 +132,7 @@ my_deep_int_expr(N) ->
           ]).
 
 %%--------------------------------------------------------------------
-%% Generators for normal vectors
+%% Generators for normal vectors and operators
 %%--------------------------------------------------------------------
 
 my_vector() ->
@@ -152,8 +156,11 @@ my_norm() -> union(['norm_one', 'norm_inf']).
 
 %% @doc
 %% Runs all tests for the 50 evaluator implementations.
+-spec run_tests() -> ok.
 run_tests() -> run_tests(1).
 
+%% Run all tests for evaluator implementation number N and up to 50.
+- spec run_tests(pos_integer()) -> ok.
 run_tests(N) when N > 50 -> ok;
 run_tests(N) ->
     run_test(N),
@@ -161,6 +168,7 @@ run_tests(N) ->
 
 %% @doc
 %% Runs all tests for evaluator implementation number N.
+-spec run_test(pos_integer()) -> ok.
 run_test(N) ->
     try
         case test(N) of
@@ -177,6 +185,7 @@ run_test(N) ->
 
 %% @doc
 %% Runs all tests for the evaluator implementations number in the list
+-spec run_specific_tests([pos_integer()]) -> ok.
 run_specific_tests([]) -> ok;
 run_specific_tests([N|Ns]) ->
     run_test(N),
