@@ -19,3 +19,10 @@ had to comment out the export of the properties.
 I don't understand this problem, but I hope you can find a way to run
 the tests, for example using "c(bughunt, [export_all])".
 
+There is a helper function, bughunt:run_tests/0, that checks all the
+50 implementations. It shows that implementations 27, 35, 37 and 39
+are correct, while the other 46 implementations are flawed.
+
+Personally, I think the four 'correct' implementations actually are
+not correct, since they allow an expression with non-integer vectors
+like '[foo]'. :-)
