@@ -3,7 +3,7 @@
 
 APPNAME=afp_assignment_1
 
-ZIPFILE=afp_assignment.zip
+ZIPFILE=afp_assignment1.zip
 
 #ERLCFLAGS=-Werror +debug_info
 ERLCFLAGS=+debug_info
@@ -19,6 +19,8 @@ SOURCES=$(wildcard $(SRCDIR)/*.erl)
 TESTSOURCES=$(wildcard $(TESTDIR)/*.erl)
 OBJECTS=$(SOURCES:$(SRCDIR)/%.erl=$(BEAMDIR)/%.beam)
 TESTOBJECTS=$(TESTSOURCES:$(TESTDIR)/%.erl=$(BEAMDIR)/%.beam)
+
+DISTFILES=README.txt road.erl road.pdf calc_pi.erl vector_server.erl bughunt.erl
 
 #VPATH=$(SRCDIR):$(TESTDIR)
 
@@ -48,7 +50,7 @@ doc:
 	erl -noshell -eval "edoc:application($(APPNAME), \".\", [$(EDOCOPTS)])" -s init stop
 
 dist: distclean
-	zip $(ZIPFILE) *
+	zip $(ZIPFILE) $(DISTFILES)
 clean:
 	rm -rf $(BEAMDIR)
 	rm -f *.beam
