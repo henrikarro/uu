@@ -1,14 +1,56 @@
+%%%===================================================================
+%%% @author Henrik Arro <henrik.arro@gmail.com>
+%%%  [http://reallifedeveloper.com]
+%%%
+%%% @copyright 2017 Henrik Arro
+%%%
+%%% @doc Runs property-based tests against 50 different implementations
+%%% of evaluators for the vector expression language.
+%%%
+%%% All properties compare the result of evaluating expressions using
+%%% the evaluator under test with the result of evaluating the
+%%% expressoins using {@link vector_server:eval_expr/1}. The
+%%% properties differ in how the expressions are generated.
+%%%
+%%% @see vector_server:expr()
+%%% @end
+%%%===================================================================
+
 -module(bughunt).
 
 -export([test/1, run_tests/0, run_specific_tests/1]).
 
-%-export([prop_sub_mul/1, prop_mul_norm_inf/1, prop_with_type_as_generator/1,
-%         prop_long_or_empty_vectors/1, prop_deep_expr/1, prop_deep_int_expr/1]).
+%% Note: I think the properties should be exported, but if the following two
+%% export lines are not commented, I get the following error when running
+%% proper:quickcheck:
+%%
+%%{error,
+%%    {typeserver,
+%%        {cant_load_code,bughunt,
+%%            {no_abstract_code,
+%%                {cant_compile_source_file,
+%%                    [{"bughunt.erl",
+%%                      [{25,erl_lint,{undefined_function,{prop_deep_expr,1}}},
+%%                       {25,erl_lint,
+%%                        {undefined_function,{prop_deep_int_expr,1}}},
+%%                       {25,erl_lint,{undefined_function,{prop_expr,2}}},
+%%                       {25,erl_lint,
+%%                        {undefined_function,{prop_long_or_empty_vectors,1}}},
+%%                       {25,erl_lint,
+%%                        {undefined_function,
+%%                            {prop_with_type_as_generator,1}}}]}]}}}}}
+%%
+%% The only solution I have found is to comment out the exports, and then use
+%% c(bughunt, [export_all]) in the shell.
+%%
+%-export([prop_expr/2, prop_with_type_as_generator/1, prop_long_or_empty_vectors/1,
+%         prop_deep_expr/1, prop_deep_int_expr/1]).
 
 -include_lib("proper/include/proper.hrl").
 
 -type expr() :: vector_server:expr().
 -type vector() :: vector_server:vector().
+-type scalar_op() :: vector_server:scalar_op().
 
 -type eval_result() :: vector() | error.
 -type evaluator() :: fun((expr()) -> eval_result()).
@@ -24,15 +66,34 @@
 test(Id) ->
     Evaluator = vectors:vector(Id),
     Properties = [
-                  {bughunt:prop_sub_mul(Evaluator), 1, "Does not handle {sub,[0],{mul,0,[0]}}"},
-                  {bughunt:prop_mul_norm_inf(Evaluator), 1, "Does not handle {mul,{norm_inf,[0]},[1]}"},
-                  {bughunt:prop_with_type_as_generator(Evaluator), 500, "Discovered using type as generator"},
-                  {bughunt:prop_long_or_empty_vectors(Evaluator), 500, "Does not handle long or empty vectors"},
-                  {bughunt:prop_deep_expr(Evaluator), 500, "Does not handle deeply nested expr"},
-                  {bughunt:prop_deep_int_expr(Evaluator), 500, "Does not handle deeply nested int_expr"}
+                  % First a few specific expressions that we have found during testing:
+                  {bughunt:prop_expr(Evaluator, {sub,[0],{mul,0,[0]}}), 1, "Does not handle {sub,[0],{mul,0,[0]}}"},
+                  {bughunt:prop_expr(Evaluator, {mul,{norm_inf,[0]},[1]}), 1, "Does not handle {mul,{norm_inf,[0]},[1]}"},
+                  {bughunt:prop_expr(Evaluator, {mul,{norm_one,[]},[1]}), 1, "Does not handle {mul,{norm_one,[]},[1]}"},
+                  {bughunt:prop_expr(Evaluator, {mul,{norm_one,lists:seq(1,101)},[1]}), 1, "Does not handle {mul,{norm_one,[0..101]},[1]}"},
+                  {bughunt:prop_expr(Evaluator, {mul,{norm_one,[-1]},[1]}), 1, "Does not handle {mul,{norm_one,[-1]},[1]}"},
+                  {bughunt:prop_expr(Evaluator, create_nested_scalar_expr(100, mul, 1, [1])), 1, "Does not handle {mul,1,{mul,1,{mul,1{...}}}} 100 deep"},
+
+                  % Now the 'real' properties:
+                  {bughunt:prop_with_type_as_generator(Evaluator), 400, "Discovered using type as generator"},
+                  {bughunt:prop_long_or_empty_vectors(Evaluator), 200, "Does not handle long or empty vectors"},
+                  {bughunt:prop_deep_expr(Evaluator), 200, "Does not handle deeply nested expr"},
+                  {bughunt:prop_deep_int_expr(Evaluator), 200, "Does not handle deeply nested int_expr"}
                  ],
     test_with_properties(Evaluator, Properties).
 
+%% @doc
+%% Creates a nested scalar expression {Op,N,{Op,N,{...{Op,N,V}...}}}.
+-spec create_nested_scalar_expr(non_neg_integer(), scalar_op(), integer(), vector()) -> expr().
+create_nested_scalar_expr(0, Op, N, V) -> {Op, N, V};
+create_nested_scalar_expr(Depth, Op, N, V) -> {Op, N, create_nested_scalar_expr(Depth - 1, Op, N, V)}.
+
+%% @doc
+%% Runs tests specified by the property info list using the given evaluator.
+%% Each proprety info specifies the property to use, the  number of tests to run,
+%% and the comment to use if a test fails. The result is either 'correct' if no
+%% test failed, or a test result showing the expression that failed, the expected
+%% and actual results, and the given comment.
 -spec test_with_properties(evaluator(), [property_info()]) -> test_result().
 test_with_properties(_Evaluator, []) -> correct;
 test_with_properties(Evaluator, [{Property, NumTests, Comment}|Properties]) ->
@@ -44,34 +105,50 @@ test_with_properties(Evaluator, [{Property, NumTests, Comment}|Properties]) ->
             test_result(Evaluator, Comment)
     end.
 
+%% @doc
+%% Creates a test result for a failed test, containing the expression that caused
+%% the failure, the expected and actual results, and a comment describing the
+%% error.
+%%
+%% The expression that cause the failure is taken from PropEr, using the funcion
+%% `proper:counterexample()'.
 -spec test_result(evaluator(), string()) -> failed_test_result().
-test_result(Evaluator, Message) ->
+test_result(Evaluator, Comment) ->
             FailedExpr = hd(proper:counterexample()),
-            {FailedExpr, eval_expr(FailedExpr), Evaluator(FailedExpr), Message}.
+            {FailedExpr, eval_expr(FailedExpr), Evaluator(FailedExpr), Comment}.
 
-%%--------------------------------------------------------------------
+%%%===================================================================
 %% Properties
-%%--------------------------------------------------------------------
+%%%===================================================================
 
-prop_sub_mul(Evaluator) ->
-    ?FORALL(Expr, {sub,[0],{mul,0,[0]}}, eval_expr(Expr) =:= Evaluator(Expr)).
+%% @doc
+%% Property that alwayas uses the given expression.
+prop_expr(Evaluator, Expr) ->
+    ?FORALL(E, gen_static_expr(Expr), eval_expr(E) =:= Evaluator(E)).
 
-prop_mul_norm_inf(Evaluator) ->
-    ?FORALL(Expr, {mul, {norm_inf,[0]},[1]}, eval_expr(Expr) =:= Evaluator(Expr)).
-
+%% @doc
+%% Property that uses random expressions based on the `expr' type.
 prop_with_type_as_generator(Evaluator) ->
     ?FORALL(Expr, vector_server:expr(), eval_expr(Expr) =:= Evaluator(Expr)).
 
+%% @doc
+%% Property that uses random expression with long or empty vectors.
 prop_long_or_empty_vectors(Evaluator) ->
-        ?FORALL(Expr, my_expr_long_or_empty_vectors(), eval_expr(Expr) =:= Evaluator(Expr)).
+        ?FORALL(Expr, gen_expr_long_or_empty_vectors(), eval_expr(Expr) =:= Evaluator(Expr)).
 
+%% @doc
+%% Property that uses random deeply nested expressions.
 prop_deep_expr(Evaluator) ->
-    ?FORALL(Expr, my_deep_expr(), eval_expr(Expr) =:= Evaluator(Expr)).
+    ?FORALL(Expr, gen_deep_expr(), eval_expr(Expr) =:= Evaluator(Expr)).
 
+%% @doc
+%% Property that ues random expressions containing deeploy nested integer expressions.
 prop_deep_int_expr(Evaluator) ->
-    ?FORALL(Expr, {mul, my_deep_int_expr(), my_vector()}, eval_expr(Expr) =:= Evaluator(Expr)).
+    ?FORALL(Expr, {mul, gen_deep_int_expr(), gen_vector()}, eval_expr(Expr) =:= Evaluator(Expr)).
 
-%% Translates exception error handling to the error handling used in the vectors module.
+%% @doc
+%% Evaluates the given expression using the reference evaluator and translates exception
+%% error handling to the error handling used in the vectors module.
 -spec eval_expr(expr()) -> eval_result().
 eval_expr(Expr) ->
     try
@@ -81,62 +158,98 @@ eval_expr(Expr) ->
             error
     end.
 
-%%--------------------------------------------------------------------
-%% Generators for expressions with long or empty vectors
-%%--------------------------------------------------------------------
+%%%===================================================================
+%%% Generators
+%%%===================================================================
 
-my_expr_long_or_empty_vectors() -> ?SIZED(N, my_expr_long_or_empty_vectors(N)).
-my_expr_long_or_empty_vectors(0) -> my_long_vector();
-my_expr_long_or_empty_vectors(N) ->
+%%--------------------------------------------------------------------
+%% @doc
+%% Generator that always produces the given expression.
+%% @end
+% I'm sure there is a better way to tell PropEr to use some static value.
+%%--------------------------------------------------------------------
+gen_static_expr(Expr) ->
+    union([Expr]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Generator that produces expressions with long or empty vectors.
+%% @end
+%%--------------------------------------------------------------------
+gen_expr_long_or_empty_vectors() -> ?SIZED(N, gen_expr_long_or_empty_vectors(N)).
+
+%% @doc
+%% Generator that produces nested expressions with long or empty vectors.
+%% The nesting depth is log2(N).
+gen_expr_long_or_empty_vectors(0) -> gen_long_vector();
+gen_expr_long_or_empty_vectors(N) ->
     union([
            [],
-           my_long_vector(),
-           {my_vector_op(), my_expr_long_or_empty_vectors(N div 2), my_expr_long_or_empty_vectors(N div 2)},
-           {my_scalar_op(), my_int_expr_long_or_empty_vectors(N div 2), my_expr_long_or_empty_vectors(N div 2)}
+           gen_long_vector(),
+           {gen_vector_op(), gen_expr_long_or_empty_vectors(N div 2), gen_expr_long_or_empty_vectors(N div 2)},
+           {gen_scalar_op(), gen_int_expr_long_or_empty_vectors(N div 2), gen_expr_long_or_empty_vectors(N div 2)}
           ]).
 
-my_long_vector() ->
+%% @doc
+%% Generator that produces vectors with between 98 and 102 integer elements.
+gen_long_vector() ->
     ?LET(N, range(98, 102), vector(N, integer())).
 
-my_int_expr_long_or_empty_vectors(0) -> integer();
-my_int_expr_long_or_empty_vectors(N) ->
+%% @doc
+%% Generator that produces an integer expression with a nested expression
+%% with long or empty vectors.
+gen_int_expr_long_or_empty_vectors(0) -> integer();
+gen_int_expr_long_or_empty_vectors(N) ->
     union([
            integer(),
-           {my_norm(), my_expr_long_or_empty_vectors(N div 2)}
+           {gen_norm_op(), gen_expr_long_or_empty_vectors(N div 2)}
           ]).
 
 %%--------------------------------------------------------------------
-%% Generators for deeply nested expressions (with no int_expr)
+%% @doc
+%% Generator that produces deeply nested expressions (with no int_expr)
+%% @end
 %%--------------------------------------------------------------------
+gen_deep_expr() ->
+    ?LET(N, range(98, 102), gen_deep_expr(N)).
 
-my_deep_expr() ->
-    ?LET(N, range(98, 102), my_deep_expr(N)).
-
-my_deep_expr(0) -> my_vector();
-my_deep_expr(N) ->
+%% @doc
+%% Generator that produces a nested expression with the given depth.
+gen_deep_expr(0) -> gen_vector();
+gen_deep_expr(N) ->
     union([
-           {my_vector_op(), my_deep_expr(N - 1), my_deep_expr(0)}
+           {gen_vector_op(), gen_deep_expr(N - 1), gen_deep_expr(0)}
           ]).
 
 %%--------------------------------------------------------------------
-%% Generators for deeply nested integer expressions
+%% @doc
+%% Generator that produces expressions that contain deeply nested
+%% integer expressions.
+%% @end
 %%--------------------------------------------------------------------
+gen_deep_int_expr() ->
+    ?LET(N, range(98, 102), gen_deep_int_expr(N)).
 
-my_deep_int_expr() ->
-    ?LET(N, range(98, 102), my_deep_int_expr(N)).
-
-my_deep_int_expr(0) -> integer();
-my_deep_int_expr(N) ->
+%% @doc
+%% Generator that produces an expression containing an nested integer
+%% expression with the given depth.
+gen_deep_int_expr(0) -> integer();
+gen_deep_int_expr(N) ->
     union([
-           {my_norm(), my_deep_expr(N - 1)}
+           {gen_norm_op(), gen_deep_expr(N - 1)}
           ]).
 
 %%--------------------------------------------------------------------
 %% Generators for normal vectors and operators
 %%--------------------------------------------------------------------
 
-my_vector() ->
+%% @doc
+%% Generator that produces 'normal' vectors, where the majority are
+%% of length 3, some are of other lengths, both legal and illegal.
+gen_vector() ->
     weighted_union([
+                    {1, []},
                     {1000, vector(3, integer())},
                     {1, vector(4, integer())},
                     {1, vector(99, integer())},
@@ -144,11 +257,17 @@ my_vector() ->
                     {1, vector(101, integer())}
                    ]).
 
-my_vector_op() -> union(['add', 'sub', 'dot']).
+%% @doc
+%% Generator that produces a random {@link vector_server:vector_op()}.
+gen_vector_op() -> union(['add', 'sub', 'dot']).
 
-my_scalar_op() -> union(['mul', 'div']).
+%% @doc
+%% Generator that produces a random {@link vector_server:scalar_op()}.
+gen_scalar_op() -> union(['mul', 'div']).
 
-my_norm() -> union(['norm_one', 'norm_inf']).
+%% @doc
+%% Generator that produces a random {@link vector_server:norm()}.
+gen_norm_op() -> union(['norm_one', 'norm_inf']).
 
 %%--------------------------------------------------------------------
 %% Helper functions for running tests
@@ -159,7 +278,8 @@ my_norm() -> union(['norm_one', 'norm_inf']).
 -spec run_tests() -> ok.
 run_tests() -> run_tests(1).
 
-%% Run all tests for evaluator implementation number N and up to 50.
+%% @doc
+%% Runs all tests for evaluator implementation number N and up to 50.
 - spec run_tests(pos_integer()) -> ok.
 run_tests(N) when N > 50 -> ok;
 run_tests(N) ->
