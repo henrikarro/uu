@@ -21,7 +21,7 @@
 %%% <br/>
 %%% &lt;int-expr&gt; ::= &lt;integer&gt; | {&lt;norm&gt;, &lt;expr&gt;}<br/>
 %%% <br/>
-%%% &lt;norm&gt; ::= ’norm one’ | ’norm inf’
+%%% &lt;norm&gt; ::= ’norm_one’ | ’norm_inf’
 %%% </p>
 %%% @end
 %%%-------------------------------------------------------------------
@@ -264,10 +264,13 @@ eval_expr_test_() ->
 eval_expr_error_test_() ->
     [
      fun() -> assert_eval_expr_error({'div', 0, [1,2,3,4,5]}, eval_error, "Error: badarith") end,
+     fun() -> assert_eval_expr_error({'div', 0, [0]}, eval_error, "Error: badarith") end,
+     fun() -> assert_eval_expr_error({'div', 0, []}, eval_error, "Empty vectors are not allowed") end,
      fun() -> assert_eval_expr_error({add, [], []}, eval_error, "Empty vectors are not allowed") end,
      fun() -> assert_eval_expr_error({add, lists:seq(1,101), lists:seq(1,101)}, eval_error, "Length of vectors must be <= 100") end,
      fun() -> assert_eval_expr_error(create_nested_expr(101, add, [1], [2]), eval_error, "Expression too deeply nested") end,
      fun() -> assert_eval_expr_error({mul, {norm_inf, create_nested_expr(99, add, [1], [2])}, [1]}, eval_error, "Expression too deeply nested") end,
+     fun() -> assert_eval_expr_error({mul, {foo, [1,2]}, [3,4]}, eval_error, "Illegal integer expression: {foo,[1,2]}") end,
      fun() -> assert_eval_expr_error({add, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end,
      fun() -> assert_eval_expr_error({sub, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end,
      fun() -> assert_eval_expr_error({dot, [1,2], [1,2,3]}, eval_error, "Vectors must be same length") end
