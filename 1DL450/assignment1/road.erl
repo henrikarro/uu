@@ -82,6 +82,7 @@ days_assignment_example_test_() ->
      ?_assertEqual(2, road:days(30, [{1,5},{11,27},{2,14},{18,28}], 24)),
      ?_assertEqual(1, road:days(30, [{1,5},{11,27},{2,14},{18,28}], 25)),
      ?_assertEqual(1, road:days(30, [{1,5},{11,27},{2,14},{18,28}], 26)),
+     ?_assertEqual(1, road:days(30, [{1,5},{11,27},{2,14},{18,28}], 29)),
      ?_assertEqual(0, road:days(30, [{1,5},{11,27},{2,14},{18,28}], 30))
     ].
 
