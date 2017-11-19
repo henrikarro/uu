@@ -2,3 +2,6 @@
 ebin/
 doc/
 erl_crash.dump
+
+*.bak
+compiled/
