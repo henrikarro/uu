@@ -43,7 +43,7 @@ eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
 
 proper: compile_tests
-	erl -noshell -pa $(BEAMDIR) -eval "proper:module(road, [{numtests, 10000}])" -s init stop
+	erl -noshell -pa $(BEAMDIR) -eval "proper:module(magic, [{numtests, 10000}])" -s init stop
 
 doc:
 	mkdir -p $(DOCDIR)
