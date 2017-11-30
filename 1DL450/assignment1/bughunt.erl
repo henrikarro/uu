@@ -43,8 +43,8 @@
 %% The only solution I have found is to comment out the exports, and then use
 %% c(bughunt, [export_all]) in the shell.
 %%
-%-export([prop_expr/2, prop_with_type_as_generator/1, prop_long_or_empty_vectors/1,
-%         prop_deep_expr/1, prop_deep_int_expr/1]).
+-export([prop_expr/2, prop_with_type_as_generator/1, prop_long_or_empty_vectors/1,
+         prop_deep_expr/1, prop_deep_int_expr/1]).
 
 -include_lib("proper/include/proper.hrl").
 
@@ -129,7 +129,7 @@ prop_expr(Evaluator, Expr) ->
 %% @doc
 %% Property that uses random expressions based on the `expr' type.
 prop_with_type_as_generator(Evaluator) ->
-    ?FORALL(Expr, vector_server:expr(), eval_expr(Expr) =:= Evaluator(Expr)).
+    ?FORALL(Expr, expr(), eval_expr(Expr) =:= Evaluator(Expr)).
 
 %% @doc
 %% Property that uses random expression with long or empty vectors.
