@@ -8,28 +8,33 @@
 
 -type game_node() :: pos_integer().
 
--spec dice(game_node(), [{game_node(), game_node()}, ...], [die(), ...]) -> integer().
+-spec dice(game_node(), [{game_node(), game_node()}, ...], [die()]) -> integer().
 dice(N, Nodes, Dice) ->
     spawn_state_server(Dice),
     Graph = build_graph(Nodes),
-    dice(Graph, N, [1], 1).
+    dice(Graph, N, [1], 0).
 
--spec dice(digraph:graph(), game_node(), [game_node()], pos_integer()) -> integer().
+-spec dice(digraph:graph(), game_node(), [game_node()], non_neg_integer()) -> integer().
 dice(_Graph, _WinningNode, [], _MoveNumber) ->
     -1;
 dice(Graph, WinningNode, StartNodes, MoveNumber) ->
-    case has_seen_position_before(current_die_number(), StartNodes) of
+    case lists:any(fun(Node) -> Node =:= WinningNode end, StartNodes) of
         true ->
-            -1;
+            MoveNumber;
         false ->
-            add_to_positions_seen(current_die_number(), StartNodes),
-            Die = next_die(),
-            EndNodes = traverse_to_depth(Graph, StartNodes, Die),
-            case lists:any(fun(Node) -> Node =:= WinningNode end, EndNodes) of
+            case has_seen_position_before(current_die_number(), StartNodes) of
                 true ->
-                    MoveNumber;
+                    -1;
                 false ->
-                    dice(Graph, WinningNode, EndNodes, MoveNumber + 1)
+                    add_to_positions_seen(current_die_number(), StartNodes),
+                    Die = next_die(),
+                    case Die =:= -1 of
+                        true ->
+                            -1;
+                        false ->
+                            EndNodes = traverse_to_depth(Graph, StartNodes, Die),
+                            dice(Graph, WinningNode, EndNodes, MoveNumber + 1)
+                    end
             end
     end.
 
@@ -86,7 +91,7 @@ traverse_to_depth(Graph, [StartNode|StartNodes], Depth) ->
 -type die_number() :: pos_integer().
 
 -record(dice_information, {current_die_number :: die_number(),
-                           dice :: [die(), ...]}).
+                           dice :: [die()]}).
 -type dice_information() :: #dice_information{}.
 
 -record(position_seen, {die_number :: die_number(),
@@ -97,7 +102,7 @@ traverse_to_depth(Graph, [StartNode|StartNodes], Depth) ->
                 positions_seen :: [position_seen()]}).
 -type state() :: #state{}.
 
--spec spawn_state_server([die(), ...]) -> true.
+-spec spawn_state_server([die()]) -> true.
 spawn_state_server(Dice) ->
     case whereis(?STATE_SERVER) of
         undefined ->
@@ -142,7 +147,12 @@ current_die_number(#state{dice_information=#dice_information{current_die_number=
 
 -spec current_die(state()) -> die().
 current_die(#state{dice_information=#dice_information{current_die_number=CurrentDieNumber, dice=Dice}}) ->
-    lists:nth(CurrentDieNumber, Dice).
+    case length(Dice) =:= 0 of
+        true ->
+            -1;
+        false ->
+            lists:nth(CurrentDieNumber, Dice)
+    end.
 
 -spec update_state_to_next_die(state()) -> state().
 update_state_to_next_die(State = #state{dice_information=#dice_information{current_die_number=CurrentDieNumber, dice=Dice}}) ->
@@ -177,7 +187,7 @@ current_die_number() ->
             CurrentDieNumber
     end.
 
--spec next_die() -> die().
+-spec next_die() -> die() | -1.
 next_die() ->
     ?STATE_SERVER ! {dice, self(), next_die},
     receive
@@ -206,6 +216,8 @@ add_to_positions_seen(CurrentDieNumber, Nodes) ->
 
 dice_test_() ->
     [
+     ?_assertEqual(0, dice(1, [{1,2}], [])),
+     ?_assertEqual(-1, dice(2, [{1,2}], [])),
      ?_assertEqual(1, dice(2, [{1,2}], [1])),
      ?_assertEqual(-1, dice(2, [{1,2}], [2])),
      ?_assertEqual(-1, dice(2, [{1,2}, {2,1}], [2])),
@@ -259,7 +271,7 @@ traverse_to_depth_graph_1_test() ->
     ?assertEqual([1,3], traverse_to_depth(G, [2], 3)),
     ?assertEqual([2], traverse_to_depth(G, [2], 4)),
     ?assertEqual([1,3], traverse_to_depth(G, [2], 5)),
-    % Search starting from 2
+    % Search starting from 3
     ?assertEqual([3], traverse_to_depth(G, [3], 0)),
     ?assertEqual([2], traverse_to_depth(G, [3], 1)),
     ?assertEqual([1,3], traverse_to_depth(G, [3], 2)),
