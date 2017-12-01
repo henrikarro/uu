@@ -42,6 +42,9 @@ dialyzer: compile
 eunit: compile_tests
 	erl -noshell -pa ebin -eval 'eunit:test("$(BEAMDIR)",[verbose])' -s init stop
 
+rackunit:
+	-raco test *.rkt
+
 proper: compile_tests
 	erl -noshell -pa $(BEAMDIR) -eval "proper:module(magic, [{numtests, 10000}])" -s init stop
 
