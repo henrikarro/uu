@@ -1,6 +1,7 @@
 -module(magic).
 -include_lib("proper/include/proper.hrl").
 
+-export([prop_spells/0, prop_spells_targeted/0]).
 -export([run_tests/1]).
 
 %% -------------------------
@@ -38,7 +39,7 @@ spell() ->
 list_of_spells_next(PreviousSpells, _Temperature) ->
     frequency([
                {1, list_of_spells()},
-               {99, add_remove_or_replace_random_spell(PreviousSpells)}
+               {49, add_remove_or_replace_random_spell(PreviousSpells)}
               ]).
 
 add_remove_or_replace_random_spell(PreviousSpells) ->
@@ -51,12 +52,9 @@ add_remove_or_replace_random_spell(PreviousSpells) ->
                          delete(PreviousSpells, rand:uniform(length(PreviousSpells)));
                      length(PreviousSpells) > 0 andalso R < 0.7 ->
                          replace(PreviousSpells, rand:uniform(length(PreviousSpells)), NextSpell);
-                     length(PreviousSpells) > 0 ->
-                         insert(PreviousSpells, rand:uniform(length(PreviousSpells) + 1), NextSpell);
                      true ->
-                         [NextSpell]
+                         insert(PreviousSpells, rand:uniform(length(PreviousSpells) + 1), NextSpell)
                  end,
-
 %             io:format("~w ~w~n", [length(PreviousSpells), length(Spells)]),
              Spells
          end).
@@ -86,7 +84,7 @@ replace([X|Xs], N, E) -> [X|replace(Xs, N - 1, E)].
 run_tests(0) -> ok;
 run_tests(N) ->
     io:format("Running test ~w~n", [N]),
-    case proper:quickcheck(prop_spells_targeted(), [{numtests, 10000}, quiet]) of
+    case proper:quickcheck(prop_spells_targeted(), [{numtests, 20000}, quiet]) of
         true ->
             fail;
         false ->
