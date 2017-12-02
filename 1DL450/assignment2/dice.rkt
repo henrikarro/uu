@@ -3,6 +3,8 @@
 (require racket/class)
 (require (prefix-in g: graph))
 
+(provide dice)
+
 (define dice-state '())
 
 (define (dice winning-node nodes dice)
