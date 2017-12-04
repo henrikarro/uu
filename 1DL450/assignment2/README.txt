@@ -24,3 +24,26 @@ The dice and the positions that we have already seen are stored as
 global data in both programs. In dice.erl, a stateful process holds
 the state, while in dice.rkt, a class represents the state and a
 global singleton object is created.
+
+----------------------------------------------------------------------
+Regarding relations.rkt
+
+I "cheat" by letting the normal Racket evaluator do most of the work:
+
+- #%top is redefined to return a global relation definition.
+
+- In restrict, I create a namespace where column names are bound
+to the row's values, and then simply eval the condition. This means
+that restrict accepts much more complex conditions than the ones
+specified in the assignment description. For example, you can do
+
+(restrict pers (salary . < . (* (string-length name) 1000)))
+
+to find low-paid people with long names. :-)
+
+I consider this a feature and not a bug.
+
+(To be honest, I have actually been trying to find a way to create
+a namespace with only the exported names from relations.rkt, but
+have not found any. So instead I create a "normal" namespace and
+define "=" and "!=" appropriately.)
