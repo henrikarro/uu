@@ -20,12 +20,12 @@ days(Length, Intervals, Goal) ->
 
 -spec days(pos_integer(), [interval()], non_neg_integer(), [interval()], non_neg_integer()) -> integer().
 days(Length, [], Goal, IntervalsSoFar, Day) ->
-    case is_schedulable(Goal + 1, IntervalsSoFar, 1, Length) of
+    case is_schedulable(Goal + 1, IntervalsSoFar, 0, Length) of
         true -> -1;
         false -> Day
     end;
 days(Length, [Interval|Intervals], Goal, IntervalsSoFar, Day) ->
-    case is_schedulable(Goal + 1, IntervalsSoFar, 1, Length) of
+    case is_schedulable(Goal + 1, IntervalsSoFar, 0, Length) of
         true ->
             NewIntervals = add_interval(Interval, IntervalsSoFar),
             days(Length, Intervals, Goal, NewIntervals, Day + 1);
@@ -58,12 +58,12 @@ add_interval({L1,H1}, [{L2,H2}|Intervals]) when L1 >= L2 andalso H1 =< H2 ->
 %% a time window defined by Start and End, and with other tasks defined by
 %% a list of intervals already scheduled.
 -spec is_schedulable(non_neg_integer(), [interval()], pos_integer(), pos_integer()) -> boolean().
-is_schedulable(Length, [], Start, End) -> End - Start + 1 >= Length;
+is_schedulable(Length, [], Start, End) -> End - Start >= Length;
 is_schedulable(_Length, _Intervals, Start, End) when Start >= End -> false;
-is_schedulable(Length, [{L,H}|Intervals], Start, End) when Start =< L ->
-    L - Start + 1 >= Length orelse is_schedulable(Length, Intervals, H + 1, End);
-is_schedulable(Length, [{L,H}|Intervals], Start, End) when Start > L ->
-    is_schedulable(Length, Intervals, H + 1, End).
+is_schedulable(Length, [{L,H}|Intervals], Start, End) when Start < L ->
+    L - Start >= Length orelse is_schedulable(Length, Intervals, H, End);
+is_schedulable(Length, [{L,H}|Intervals], Start, End) when Start >= L ->
+    is_schedulable(Length, Intervals, H, End).
 
 %%--------------------------------------------------------------------
 %% EUnit Test Cases
@@ -88,11 +88,27 @@ days_assignment_example_test_() ->
 
 days_test_() ->
     [
+     ?_assertEqual(1, road:days(1, [{0,1}], 0)),
+     ?_assertEqual(-1, road:days(1, [{1,1}], 0)),
+     ?_assertEqual(1, road:days(2, [{0,2}], 0)),
+     ?_assertEqual(-1, road:days(2, [{1,2}], 0)),
      ?_assertEqual(-1, road:days(10, [{1,5},{6,10}], 0)),
      ?_assertEqual(2, road:days(100, [{1,10},{20,100}], 10)),
 
      %% The following test cases that I missed were found by PropEr.
      ?_assertEqual(2, road:days(1000, [{1,361},{458,900},{1,225}], 100))
+    ].
+
+days_assignment_grading_test_() ->
+    [
+     ?_assertEqual(2, road:days(30,[{1,5},{11,27},{2,14},{18,28}],6)),
+     ?_assertEqual(-1, road:days(30,[{1,5},{11,27},{2,14},{18,28}],1)),
+     ?_assertEqual(0, road:days(1,[{1,1}],1)),
+     ?_assertEqual(-1, road:days(1,[{1,1}],0)),
+     ?_assertEqual(1, road:days(2,[{1,1}],1)),
+     ?_assertEqual(-1, road:days(1,[{1,1},{1,1}],0)),
+     ?_assertEqual(6, road:days(58,[{57,57},{6,42},{19,23},{41,42},{15,36},{46,53},{8,46},{2,14},{58,58},{57,58},{17,28},{16,35},{23,26},{20,32}],8)),
+     ?_assertEqual(3, road:days(2573,[{119,1209},{482,1901},{1729,2463},{66,2150},{602,976},{1176,2323},{1875,2370},{1703,2463},{1912,2214},{887,1363},{1765,2242},{2278,2505},{1452,2111},{34,1782},{2189,2229},{1825,2546},{1247,1851},{2287,2328},{910,2067},{2347,2395},{1519,1672},{1253,1509},{1416,1750},{205,948},{1479,1812},{207,906},{660,840},{2263,2401},{2406,2458},{2378,2448},{862,2122},{2439,2545},{1064,1680},{702,761},{2055,2275},{1784,2405},{1170,2446},{1072,1598},{1455,2100},{2507,2531},{1094,1608},{2184,2270},{1257,2519},{2058,2566},{360,1368},{2015,2221},{1846,2046},{355,2233},{2403,2436},{1407,1985},{608,1385},{781,1377},{543,1341},{294,1454},{82,1366},{515,1504},{700,2144},{361,2231},{56,281},{770,843},{781,2367},{1726,1783},{2092,2241},{740,2321},{1579,2408},{706,2490},{239,2215},{2487,2512},{978,1756},{1422,1470},{244,2280},{1139,1214},{1227,1791},{1510,2266},{1451,2011},{2321,2444},{265,1722},{2195,2412},{2394,2465},{1251,2184},{2548,2561},{2333,2509}],349))
     ].
 
 add_interval_test_() ->
@@ -111,13 +127,15 @@ add_interval_test_() ->
 
 is_schedulable_test_() ->
     [
-     ?_assertEqual(true, is_schedulable(1, [], 1, 1)),
-     ?_assertEqual(false, is_schedulable(1, [{1,1}], 1, 1)),
-     ?_assertEqual(true, is_schedulable(1, [{1,1}], 1, 2)),
-     ?_assertEqual(true, is_schedulable(30, [], 1, 30)),
-     ?_assertEqual(false, is_schedulable(31, [], 1, 30)),
-     ?_assertEqual(true, is_schedulable(20, [{1,10}], 1, 30)),
-     ?_assertEqual(false, is_schedulable(21, [{1,10}], 1, 30))
+     ?_assertEqual(true, is_schedulable(1, [], 0, 1)),
+     ?_assertEqual(false, is_schedulable(1, [], 1, 1)),
+     ?_assertEqual(false, is_schedulable(1, [{0,1}], 0, 1)),
+     ?_assertEqual(true, is_schedulable(1, [{1,1}], 0, 1)),
+     ?_assertEqual(true, is_schedulable(1, [{0,1}], 0, 2)),
+     ?_assertEqual(true, is_schedulable(30, [], 0, 30)),
+     ?_assertEqual(false, is_schedulable(31, [], 0, 30)),
+     ?_assertEqual(true, is_schedulable(20, [{1,10}], 0, 30)),
+     ?_assertEqual(false, is_schedulable(21, [{1,10}], 0, 30))
     ].
 
 %%--------------------------------------------------------------------
