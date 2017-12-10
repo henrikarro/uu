@@ -1,4 +1,8 @@
-import Control.Monad.Par
+import Control.Monad.Par.IO (runParIO)
+import Control.Parallel.Strategies (rpar, rseq, parList, using)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Par.Combinator (parMapM)
+
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.ByteString.Lazy as LL
 import qualified Data.ByteString.Char8 as B
@@ -38,33 +42,43 @@ joinIndices = foldr (Map.unionWith Set.union) Map.empty
 mkIndex :: Int -> L.ByteString -> DocIndex
 mkIndex i s
   = Map.fromListWith Set.union [ (B.concat (L.toChunks w), Set.singleton i)
-                               | w <- ws ]
+                               | w <- ws ] --`using` rpar
   where ws = L.splitWith (not . isAlphaNum) s
 
 search :: DocIndex -> [B.ByteString] -> DocSet
 search index words = foldr1 Set.intersection (map lookup words)
-  where lookup w = Map.findWithDefault Set.empty w index
+  where lookup w = Map.findWithDefault Set.empty w index --`using` rpar
 
 -- -----------------------------------------------------------------------------
+
+buildIndex :: (Int, FilePath) -> IO DocIndex
+buildIndex (n, fs) = do
+  s <- L.readFile fs
+  let index = mkIndex n s
+  return index
+
+buildIndices :: [FilePath] -> IO [DocIndex]
+buildIndices fs = do
+  indices <- runParIO $ parMapM (\x -> liftIO $ buildIndex x) (zip [0..] fs)
+  return indices
+
+searchForWord :: B.ByteString -> [DocIndex] -> Array Int String -> [String]
+searchForWord s indices arr =
+  let results = map ((flip search) (B.words s)) indices `using` parList rseq
+      results' = map Set.toList results `using` parList rseq
+      results'' = concat results' -- `using` parList rseq
+  in
+    map (arr !) results''
 
 main = do
   hSetBuffering stdout NoBuffering
   fs <- getArgs
 
-  -- Step 1: build the index
-  ss <- mapM L.readFile fs
-  let
-      -- indices is a separate index for each (numbered) document
-      indices :: [DocIndex]
-      indices = zipWith mkIndex [0..] ss
-
-      -- union the indices together
-      index = joinIndices indices
-
-      -- array mapping doc number back to filename
+  indices <- buildIndices fs
+  -- array mapping doc number back to filename
+  let arr :: Array Int String
       arr = listArray (0,length fs - 1) fs
 
-  -- Step 2: perform search
   forever $ do
     putStr "search (^D to end): "
     eof <- isEOF
@@ -72,10 +86,6 @@ main = do
     s <- B.getLine
     putStr "wait... "
 
-    let result :: DocSet  -- set of docs containing the words in the term
-        result = search index (B.words s)
-
-        -- map the result back to filenames
-        files = map (arr !) (Set.toList result)
+    let files = searchForWord s indices arr
 
     putStrLn ("\n" ++ unlines files)
