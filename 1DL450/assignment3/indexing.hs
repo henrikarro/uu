@@ -36,8 +36,9 @@ type DocSet = IntSet
 -- A DocIndex maps a word to the set of documents that contain the word
 type DocIndex = Map B.ByteString DocSet
 
-joinIndices :: [DocIndex] -> DocIndex
-joinIndices = foldr (Map.unionWith Set.union) Map.empty
+-- We do not join the indices since we want to be able to parallelize the search
+-- joinIndices :: [DocIndex] -> DocIndex
+-- joinIndices = foldr (Map.unionWith Set.union) Map.empty
 
 mkIndex :: Int -> L.ByteString -> DocIndex
 mkIndex i s
@@ -59,22 +60,25 @@ buildIndex (n, fs) = do
 
 buildIndices :: [FilePath] -> IO [DocIndex]
 buildIndices fs = do
+--  indices <- sequence (map buildIndex (zip [0..] fs))
   indices <- runParIO $ parMapM (\x -> liftIO $ buildIndex x) (zip [0..] fs)
   return indices
 
-searchForWord :: B.ByteString -> [DocIndex] -> Array Int String -> [String]
-searchForWord s indices arr =
-  let results = map ((flip search) (B.words s)) indices `using` parList rseq
-      results' = map Set.toList results `using` parList rseq
-      results'' = concat results' -- `using` parList rseq
+searchForWords :: B.ByteString -> [DocIndex] -> [Int]
+searchForWords s indices =
+  let result = map ((flip search) (B.words s)) indices --`using` parList rseq
+      result' = map Set.toList result --`using` parList rseq
+--  let result' = map Set.toList (map ((flip search) (B.words s)) indices) `using` parList rseq
   in
-    map (arr !) results''
-
+    concat result'
+    
 main = do
   hSetBuffering stdout NoBuffering
   fs <- getArgs
 
+  -- indices is a separate index for each (numbered) document
   indices <- buildIndices fs
+
   -- array mapping doc number back to filename
   let arr :: Array Int String
       arr = listArray (0,length fs - 1) fs
@@ -86,6 +90,10 @@ main = do
     s <- B.getLine
     putStr "wait... "
 
-    let files = searchForWord s indices arr
+    let result :: [Int]  -- indices of docs containing the words in the term
+        result = searchForWords s indices
+
+        -- map the result back to filenames
+        files = map (arr !) result
 
     putStrLn ("\n" ++ unlines files)
