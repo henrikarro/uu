@@ -1,4 +1,5 @@
 import Control.Monad (forM)
+
 import Test.HUnit (Test(..), assertEqual, runTestTT)
 
 main :: IO ()
@@ -39,7 +40,6 @@ isSchedulable length [] start end = end - start >= length
 isSchedulable _length _intervals start end | start >= end = False
 isSchedulable length ((low,hi):intervals) start end | start < low = low - start >= length || isSchedulable length intervals hi end
                                                     | start >= low = isSchedulable length intervals hi end
-
 
 -- ===================================================================
 -- HUnit Test Cases
@@ -110,5 +110,7 @@ addIntervalTestData = [
 
 addIntervalTests = zipWith (\n t -> TestLabel ("addIntervalTest " ++ show n) t) [1..]
                    (map addIntervalTestCase addIntervalTestData)
-                   
-runTests = runTestTT (TestList (daysTests ++ addIntervalTests))
+
+testSuite = daysTests ++ addIntervalTests
+
+runTests = runTestTT (TestList testSuite)

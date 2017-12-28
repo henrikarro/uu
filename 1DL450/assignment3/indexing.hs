@@ -66,9 +66,9 @@ buildIndices fs = do
 
 searchForWords :: B.ByteString -> [DocIndex] -> [Int]
 searchForWords s indices =
-  let result = map ((flip search) (B.words s)) indices --`using` parList rseq
-      result' = map Set.toList result --`using` parList rseq
---  let result' = map Set.toList (map ((flip search) (B.words s)) indices) `using` parList rseq
+--  let result = map ((flip search) (B.words s)) indices --`using` parList rseq
+--      result' = map Set.toList result --`using` parList rseq
+  let result' = map Set.toList (map ((flip search) (B.words s)) indices) `using` parList rseq
   in
     concat result'
     

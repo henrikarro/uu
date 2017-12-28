@@ -76,12 +76,13 @@ dice' graph winningNode startNodes moveNumber gameState =
   then moveNumber
   else if hasSeenPositionBefore gameState (getCurrentDieNumber gameState) startNodes || getCurrentDie gameState == Nothing
        then -1
-       else foo
-  where Just (DieRoll d) = getCurrentDie gameState
-        gameState' = updateGameStateWithPositionSeen gameState (getCurrentDieNumber gameState) startNodes
-        gameState'' = updateGameStateToNextDie gameState'
-        endNodes = traverseToDepth graph startNodes d
-        foo = dice' graph winningNode endNodes (moveNumber + 1) gameState''
+       else
+         let Just (DieRoll d) = getCurrentDie gameState
+             gameState' = updateGameStateWithPositionSeen gameState (getCurrentDieNumber gameState) startNodes
+             gameState'' = updateGameStateToNextDie gameState'
+             endNodes = traverseToDepth graph startNodes d
+         in
+           dice' graph winningNode endNodes (moveNumber + 1) gameState''
 
 -- | 'traverseToDepth graph startNodes depth' gives the nodes that can be reached by traversing graph depth steops starting from the nodes in startNodes.
 traverseToDepth :: Graph -> [GameNode] -> Int -> [GameNode]
@@ -121,7 +122,7 @@ updateGameStateWithPositionSeen gameState@GameState{positionsSeen=p} d n = gameS
   where gameState' = gameState {positionsSeen=PositionSeen{dieNumber=d, nodes=n}:p}
 
 --------------------------------------------------------------------------------
--- An experimental version of dice that uses the State monad
+-- An alternative version of dice that uses the State monad to hold GameState
 --------------------------------------------------------------------------------
 
 stDice :: GameNode -> [(GameNode, GameNode)] -> [Int] -> Int
