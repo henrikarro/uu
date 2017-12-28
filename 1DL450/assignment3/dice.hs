@@ -1,8 +1,11 @@
 import Control.Monad (forM)
+import Control.Monad.State (State, state, evalState)
 import Data.Array ((!))
 import Data.Graph (Graph, buildG)
 import Data.List (minimumBy, maximumBy, nub)
 import Data.Ord (comparing)
+
+import Test.HUnit (Test(..), assertEqual, runTestTT)
 
 -- | A DieRoll is the result of rolling a die, i.e. 1..6.
 data DieRoll = DieRoll Int deriving (Eq)
@@ -116,3 +119,91 @@ hasSeenPositionBefore GameState{positionsSeen=p} d n = elem PositionSeen{dieNumb
 updateGameStateWithPositionSeen :: GameState -> DieNumber -> [GameNode] -> GameState
 updateGameStateWithPositionSeen gameState@GameState{positionsSeen=p} d n = gameState'
   where gameState' = gameState {positionsSeen=PositionSeen{dieNumber=d, nodes=n}:p}
+
+--------------------------------------------------------------------------------
+-- An experimental version of dice that uses the State monad
+--------------------------------------------------------------------------------
+
+stDice :: GameNode -> [(GameNode, GameNode)] -> [Int] -> Int
+stDice winningNode edges dieRolls = evalState (stDice' graph winningNode [1] 0) gameState
+  where graph = buildGraph edges
+        dieRolls' = map (\d -> DieRoll d) dieRolls
+        gameState = GameState{diceInformation=DiceInformation{currentDieNumber=0, dieRolls=dieRolls'}, positionsSeen=[]}
+
+stDice' :: Graph -> GameNode -> [GameNode] -> Int -> State GameState Int
+stDice' _graph _winningNode [] _moveNumber = do return (-1)
+stDice' graph winningNode startNodes moveNumber = do
+  if any (\n -> n == winningNode) startNodes
+    then return moveNumber
+    else do
+    currentDieNumber <- stGetCurrentDieNumber
+    currentDie <- stGetCurrentDie
+    positionSeen <- stHasSeenPositionBefore currentDieNumber startNodes
+    if positionSeen || currentDie == Nothing
+      then return (-1)
+      else do
+      stUpdateGameStateWithPositionSeen currentDieNumber startNodes
+      stUpdateGameStateToNextDie
+      let Just (DieRoll d) = currentDie
+          endNodes = traverseToDepth graph startNodes d
+        in stDice' graph winningNode endNodes (moveNumber + 1)
+
+stGetCurrentDieNumber :: State GameState DieNumber
+stGetCurrentDieNumber = state $ \s -> (getCurrentDieNumber s, s)
+
+stGetCurrentDie :: State GameState (Maybe DieRoll)
+stGetCurrentDie = state $ \s -> (getCurrentDie s, s)
+
+stUpdateGameStateToNextDie :: State GameState ()
+stUpdateGameStateToNextDie = state $ \s -> ((), updateGameStateToNextDie s)
+
+stHasSeenPositionBefore :: DieNumber -> [GameNode] -> State GameState Bool
+stHasSeenPositionBefore d n =  state $ \s -> (hasSeenPositionBefore s d n, s)
+
+stUpdateGameStateWithPositionSeen :: DieNumber -> [GameNode] -> State GameState ()
+stUpdateGameStateWithPositionSeen d n = state $ \s -> ((), updateGameStateWithPositionSeen s d n)
+
+--------------------------------------------------------------------------------
+-- HUnit Test Cases
+--------------------------------------------------------------------------------
+
+diceTestCase (expected, winningNode, edges, dieRolls) =
+  TestCase (assertEqual (show expected ++ " " ++ show winningNode)
+            expected (dice winningNode edges dieRolls))
+
+diceTestData :: [(Int, GameNode, [(GameNode, GameNode)], [Int])]
+diceTestData = [
+  -- My test cases
+  (0, 1, [(1,2)], []),
+  (-1, 2, [(1,2)], []),
+  (1, 2, [(1,2)], [1]),
+  (-1, 2, [(1,2)], [2]),
+  (-1, 2, [(1,2),(2,1)], [2]),
+  (1, 2, [(1,2),(2,1)], [3]),
+  -- Assignment example test cases
+  (2, 3, [(1,2),(2,1),(2,3),(3,2)], [3,5]),
+  (3, 4, [(1,2),(2,3),(3,4)], [1]),
+  (-1, 3, [(1,2),(2,1)], [3]),
+  -- Test cases from grading of assignment 2 (except the very long ones)
+  (2, 3, [(1,2),(2,1),(2,3),(3,2)], [3,5]),
+  (-1, 3, [(1,2),(2,3)], [4,2,6]),
+  (12, 10, [(7,4),(1,8),(8,5),(4,1),(2,9),(5,2),(9,6),(3,10),(6,3),(10,7)], [1,1,1,6]),
+  (54, 11, [(4,11),(5,1),(9,5),(1,8),(6,2),(10,6),(2,9),(11,7),(7,3),(3,10),(8,4)], [6,5,4,1,6,1,5,5,1,5,6,5]),
+  (42, 13, [(7,2),(11,6),(2,10),(8,3),(12,7),(3,11),(13,8),(9,4),(4,12),(10,5),(6,1),(5,13),(1,9)], [3,6,5,1,3,6,1,2,1,4,4,2,5,2,3,5]),
+  (42, 14, [(7,2),(11,6),(4,13),(12,7),(8,3),(1,10),(5,14),(13,8),(9,4),(2,11),(6,1),(10,5),(14,9),(3,12)], [5,2,5,6,2,5,1,6,6,1,1,4]),
+  (80, 14, [(11,6),(7,2),(4,13),(8,3),(12,7),(5,14),(1,10),(13,8),(9,4),(2,11),(10,5),(14,9),(6,1),(3,12)], [6,4,3,3,4,2,2,6,4,3,3,6,5,1]),
+  (-1, 20, [(5,17),(10,2),(14,6),(7,20),(20,13),(3,16),(8,1),(12,5),(16,9),(11,3),(19,11),(6,18),(17,10),(13,6),(3,15),(16,8),(20,12),(7,19),(12,4),(18,11),(10,3),(5,18),(1,14),(4,16),(17,9),(13,5),(11,4),(2,15),(6,19),(15,8)], [2,4,4,1,5,5,4,5,3,4,1,5,2,3,2,1,4,6,6]),
+  (-1, 20, [(19,5),(14,20),(10,16),(12,19),(8,15),(18,3),(13,18),(1,6),(7,13),(16,2),(20,6),(11,17),(9,16),(6,11),(10,15),(12,18),(19,6),(15,2),(10,17),(3,8),(5,11),(1,7),(13,19),(16,3),(7,14),(8,13),(17,2)], [1,6,1,6,4,1,5,4,4,2,2,3,3,5,4,3,1])
+  ]
+
+diceTests = zipWith (\n t -> TestLabel ("diceTest " ++ show n) t) [1..]
+            (map diceTestCase diceTestData)
+
+stDiceTestCase (expected, winningNode, edges, dieRolls) =
+  TestCase (assertEqual (show expected ++ " " ++ show winningNode)
+            expected (stDice winningNode edges dieRolls))
+
+stDiceTests = zipWith (\n t -> TestLabel ("stDiceTest " ++ show n) t) [1..]
+            (map stDiceTestCase diceTestData)
+
+runTests = runTestTT (TestList (diceTests ++ stDiceTests))
