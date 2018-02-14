@@ -51,7 +51,7 @@ Knowledge transfer
 
 Our basic idea is to first have a short introduction of what we mean by phase 0, and then to split the class into four groups working on two separate project. The groups working on a project will be either a customer or a developer team.
 
-We then let the groups run through an imaginary phase 0 for their project, developing for example user stories, vision and goals and perhaps some other artifacts. The groups then present what they have produced.
+We then let the groups run through an imaginary phase 0 for their project, developing for example user stories, vision and goals and perhaps some other artifacts, such as system architecture. The groups then present what they have produced.
 
 We then also cover the sprint planning for the first development sprint. In this part, the customer team for project 1 becomes the developer team for project 2, and vice versa. The teams will have to decide if they think they need a technical sprint 0 or not. The teams will also run planning poker for estimates. The result of this exercise is an estimated sprint backlog.
 
@@ -95,7 +95,7 @@ Knowledge transfer
 ------------------
 
 * A short introduction using slides
-* Workshop with live testing starting from user stories, developing examples, and writing code
+* Workshop with live testing starting from some user stories developed during the phase 0 workshop, developing examples, and writing code
 * Show a timeline of a project using both phase 0, sprint 0 and SbE
 
 Knowledge assessment
