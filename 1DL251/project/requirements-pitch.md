@@ -49,7 +49,7 @@ Here are ideas for questions to ask on devrant and during interviews:
 Knowledge transfer
 ------------------
 
-Our basic idea is to first have a short introduction of what we mean by phase 0, and then to split the class into four groups working on two separate project. The groups working on a project will be either a customer or a developer team.
+Our basic idea is to first have a short introduction of what we mean by phase 0, and then to split the class into four groups working on two separate project. The groups working on a project will be either a customer or a developer team, so each project will have one customer team and one developer team.
 
 We then let the groups run through an imaginary phase 0 for their project, developing for example user stories, vision and goals and perhaps some other artifacts, such as system architecture. The groups then present what they have produced.
 
