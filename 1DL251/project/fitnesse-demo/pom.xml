@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.reallifedeveloper</groupId>
+        <artifactId>rld-parent</artifactId>
+        <version>5</version>
+    </parent>
+
+    <groupId>com.reallifedeveloper.uu._1dl251</groupId>
+    <artifactId>fitnesse-demo</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <name>FitNesse Demo for 1DL251</name>
+    <description>A demo project for Specification by Example using Fitnesse, for the Uppsala university course Software
+    Engineering and Project Management (1DL251)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aspects</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-entitymanager</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tomcat</groupId>
+            <artifactId>tomcat-jdbc</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>com.reallifedeveloper</groupId>
+            <artifactId>rld-build-tools</artifactId>
+            <version>1.5</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hsqldb</groupId>
+            <artifactId>hsqldb</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Configure FitNesse launcher plugin. It is activated using -->
+                <!-- one of the profiles below. -->
+                <groupId>uk.co.javahelp.fitnesse</groupId>
+                <artifactId>fitnesse-launcher-maven-plugin</artifactId>
+                <configuration>
+                    <port>8181</port>
+                    <suite>FitNesseDemo</suite>
+                    <testResourceDirectory>src/test/resources/fitnesse</testResourceDirectory>
+                    <resultsDir>${project.build.directory}/failsafe-reports</resultsDir>
+                    <summaryFile>${java.io.tmpdir}/fitnesse-summary.xml</summaryFile>
+                    <useProjectDependencies>
+                        <scope>compile</scope>
+                        <scope>test</scope>
+                        <scope>runtime</scope>
+                    </useProjectDependencies>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <!-- Start FitNesse wiki listening on port 8181. -->
+            <id>fitnesse-wiki</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>uk.co.javahelp.fitnesse</groupId>
+                        <artifactId>fitnesse-launcher-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>set-up</goal>
+                                    <goal>wiki</goal>
+                                    <goal>tear-down</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <!-- Run FitNesse tests. -->
+            <id>func-test</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>uk.co.javahelp.fitnesse</groupId>
+                        <artifactId>fitnesse-launcher-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>currentSprint</id>
+                                <configuration>
+                                    <suiteFilter>currentSprint</suiteFilter>
+                                    <failIfNoTests>false</failIfNoTests>
+                                </configuration>
+                                <goals>
+                                    <goal>set-up</goal>
+                                    <goal>run-tests</goal>
+                                    <goal>tear-down</goal>
+                                    <!-- <goal>verify</goal> -->
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>regression</id>
+                                <configuration>
+                                    <excludeSuiteFilter>currentSprint</excludeSuiteFilter>
+                                </configuration>
+                                <goals>
+                                    <goal>set-up</goal>
+                                    <goal>run-tests</goal>
+                                    <goal>tear-down</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

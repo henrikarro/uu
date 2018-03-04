@@ -1,0 +1,13 @@
+!*> Variable Definitions
+!define TEST_SYSTEM {slim}
+*!
+
+!*> Classpath
+${maven.classpath}
+*!
+
+!1 !-FitNesse-! Demo for the Course 1DL251
+
+This page contains examples of using the tool !-FitNesse-! for working with [[Specification by Example][https://en.wikipedia.org/wiki/Specification_by_example]].
+
+!contents -R2 -g -p -f -h

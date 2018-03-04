@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dataset>
+
+    <role role_id="DOCTOR" description="A doctor" />
+    <role role_id="NURSE" description="A nurse" />
+
+</dataset>

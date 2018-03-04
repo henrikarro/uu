@@ -1,0 +1,5 @@
+!1 Electronic Health Record
+
+This section contains examples for an electronic health record system.
+
+!contents -R2 -g -p -f -h
